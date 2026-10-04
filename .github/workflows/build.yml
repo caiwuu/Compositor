@@ -26,7 +26,9 @@ jobs:
           -scheme Compositor
           -onlyUsePackageVersionsFromResolvedFile
 
-      # No Developer ID on the runner: signed ad hoc, which Apple silicon needs to run the app at all.
+      # No Developer ID on the runner: signed ad hoc, which Apple silicon needs to run the app at all. Without the
+      # hardened runtime: it only allows libraries from the app's own team, and ad hoc signatures have none, so the
+      # app would be stopped at launch for loading its embedded Sparkle.
       - name: Build Release
         run: >
           xcodebuild build
@@ -38,11 +40,16 @@ jobs:
           CODE_SIGN_STYLE=Manual
           CODE_SIGN_IDENTITY=-
           DEVELOPMENT_TEAM=
+          ENABLE_HARDENED_RUNTIME=NO
 
       - name: Package
         run: |
           APP=DerivedData/Build/Products/Release/Compositor.app
           codesign --verify --deep --strict --verbose=2 "$APP"
+          if codesign -dv "$APP" 2>&1 | grep -q 'flags=.*runtime'; then
+            echo "The app is signed with the hardened runtime; it won't load Sparkle on a Mac with library validation."
+            exit 1
+          fi
           ditto -c -k --keepParent "$APP" Compositor.zip
 
       - name: Upload app
