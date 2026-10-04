@@ -1095,7 +1095,8 @@ private final class LayerCell: NSTableCellView, NSTextFieldDelegate {
     }()
     private static func adjustmentIcon(_ symbolName: String, description: String, quarterTurnClockwise: Bool = false) -> NSImage? {
         if let icon = adjustmentIcons[symbolName] { return icon }
-        guard let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: description) else { return nil }
+        // Some symbols, like textformat's "Aa", draw localized glyphs unless pinned to English.
+        guard let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: description)?.withLocale(Locale(identifier: "en")) else { return nil }
         let size = NSSize(width: symbol.size.width * 1.21, height: symbol.size.height * 1.21)
         let icon = NSImage(size: NSSize(width: 36, height: 36), flipped: false) { bounds in
             let transform = NSAffineTransform()
