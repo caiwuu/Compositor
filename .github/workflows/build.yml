@@ -2,6 +2,11 @@ name: Build
 
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        description: Publish the DMG as a GitHub release once the app builds and launches
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -12,6 +17,9 @@ jobs:
     name: build
     runs-on: macos-26
     timeout-minutes: 60
+    outputs:
+      version: ${{ steps.package.outputs.version }}
+      build: ${{ steps.package.outputs.build }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -71,6 +79,7 @@ jobs:
           retention-days: 14
 
       - name: Package
+        id: package
         run: |
           APP=DerivedData/Build/Products/Release/Compositor.app
           codesign --verify --deep --strict --verbose=2 "$APP"
@@ -79,12 +88,35 @@ jobs:
             exit 1
           fi
           ditto -c -k --keepParent "$APP" Compositor.zip
+          echo "version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")" >> "$GITHUB_OUTPUT"
+          echo "build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")" >> "$GITHUB_OUTPUT"
+
+      # The app beside a link to Applications, so it installs by dragging one onto the other.
+      - name: Make disk image
+        run: |
+          mkdir dmg
+          ditto DerivedData/Build/Products/Release/Compositor.app dmg/Compositor.app
+          ln -s /Applications dmg/Applications
+          # hdiutil on a runner now and then finds the volume busy; another try gets past it.
+          for attempt in 1 2 3; do
+            hdiutil create -volname Compositor -srcfolder dmg -fs HFS+ -format UDZO -ov Compositor.dmg && break
+            sleep 5
+          done
+          hdiutil verify Compositor.dmg
 
       - name: Upload app
         uses: actions/upload-artifact@v7
         with:
           name: Compositor
           path: Compositor.zip
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload disk image
+        uses: actions/upload-artifact@v7
+        with:
+          name: Compositor.dmg
+          path: Compositor.dmg
           retention-days: 14
           if-no-files-found: error
 
@@ -115,3 +147,41 @@ jobs:
           fi
           kill "$pid"
           echo "Compositor stayed running for 20 seconds on $(sw_vers -productVersion)."
+
+  release:
+    name: release
+    needs: [build, launch-on-sequoia]
+    if: ${{ inputs.release }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download disk image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download ${{ github.run_id }} --repo ${{ github.repository }} --name Compositor.dmg
+
+      # Tagged with the app's version; built again at the same version, the run number tells the releases apart.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+          BUILD: ${{ needs.build.outputs.build }}
+        run: |
+          tag="v$VERSION"
+          if gh release view "$tag" --repo ${{ github.repository }} > /dev/null 2>&1; then
+            tag="v$VERSION-${{ github.run_number }}"
+          fi
+          dmg="Compositor-${tag#v}.dmg"
+          mv Compositor.dmg "$dmg"
+          cat > notes.md <<NOTES
+          Compositor $VERSION (build $BUILD), for macOS 15 Sequoia and later.
+
+          The app is signed ad hoc, not with a Developer ID, so macOS stops it the first time. After dragging it to
+          Applications, either Control-click it and choose Open, or run:
+
+              xattr -cr /Applications/Compositor.app
+          NOTES
+          gh release create "$tag" "$dmg" --repo ${{ github.repository }} --target ${{ github.sha }} \
+            --title "Compositor $VERSION" --notes-file notes.md --generate-notes
