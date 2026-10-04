@@ -218,8 +218,21 @@ nonisolated enum AgentPortrait {
         return filled(majority(mask, width: width, height: height, radius: 2), width: width, height: height, upTo: Int(eye * eye * 0.25))
     }
 
-    /// `mask` with the holes in it no bigger than `area` pixels filled in; gaps open to the picture's border stay.
-    private static func filled(_ mask: [UInt8], width: Int, height: Int, upTo area: Int) -> [UInt8] {
+    /// The skin of `face`, one byte per pixel: its face_skin outline where `skin` is, so hair, glasses and hands reaching
+    /// in from the edge are left out, but with everything the skin surrounds kept, however dense the freckles.
+    static func faceSkin(_ face: AgentFace, skin: [UInt8], width: Int, height: Int) -> [UInt8]? {
+        guard let outline = path(of: "face_skin", in: face), let area = rasterized([outline], width: width, height: height),
+              let whole = path(of: "face", in: face).flatMap({ rasterized([$0], width: width, height: height) }) else { return nil }
+        // Within the whole face (the features included, so they don't count as open), what isn't skin and doesn't
+        // reach outside it is a mark on the skin.
+        let inside = zip(whole, skin).map { $0 != 0 && $1 != 0 ? UInt8(255) : 0 }
+        let kept = filled(inside, width: width, height: height, upTo: .max, open: { whole[$0] == 0 })
+        return zip(area, kept).map { $0 != 0 && $1 != 0 ? UInt8(255) : 0 }
+    }
+
+    /// `mask` with the holes in it no bigger than `area` pixels filled in; gaps open to the picture's border, or touching
+    /// a pixel `open` says is outside, stay.
+    private static func filled(_ mask: [UInt8], width: Int, height: Int, upTo area: Int, open isOutside: ((Int) -> Bool)? = nil) -> [UInt8] {
         var result = mask, seen = [Bool](repeating: false, count: width * height)
         for start in 0..<(width * height) where mask[start] == 0 && !seen[start] {
             var stack = [start], region: [Int] = [], open = false
@@ -227,7 +240,7 @@ nonisolated enum AgentPortrait {
             while let index = stack.popLast() {
                 region.append(index)
                 let x = index % width, y = index / width
-                if x == 0 || y == 0 || x == width - 1 || y == height - 1 { open = true }
+                if x == 0 || y == 0 || x == width - 1 || y == height - 1 || isOutside?(index) == true { open = true }
                 for next in [x > 0 ? index - 1 : -1, x < width - 1 ? index + 1 : -1, y > 0 ? index - width : -1, y < height - 1 ? index + width : -1]
                 where next >= 0 && mask[next] == 0 && !seen[next] {
                     seen[next] = true

@@ -86,9 +86,7 @@ nonisolated enum AgentVision {
         if features.contains("skin"), let bitmap, let skin {
             result["skin"] = faces.enumerated().map { index, face -> JSONObject in
                 var report: JSONObject = ["face_index": index]
-                if let outline = AgentPortrait.path(of: "face_skin", in: face),
-                   let area = AgentPortrait.rasterized([outline], width: image.width, height: image.height) {
-                    let facial = zip(area, skin).map { $0 != 0 && $1 != 0 ? UInt8(255) : 0 }
+                if let facial = AgentPortrait.faceSkin(face, skin: skin, width: image.width, height: image.height) {
                     report.merge(AgentPortrait.skinReport(bitmap, face: face, skin: facial, offset: offset)) { _, new in new }
                 }
                 return report

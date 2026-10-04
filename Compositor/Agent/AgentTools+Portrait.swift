@@ -74,7 +74,12 @@ extension AgentTools {
         case "person":
             return try MagicWand.outline(of: try AgentPortrait.personMask(image), width: width, height: height)
         case "skin":
-            let skin = AgentPortrait.skinMask(try AgentBitmap(image), faces: try AgentPortrait.faces(in: image), person: try AgentPortrait.personMask(image))
+            let faces = try AgentPortrait.faces(in: image)
+            var skin = AgentPortrait.skinMask(try AgentBitmap(image), faces: faces, person: try AgentPortrait.personMask(image))
+            for face in faces {
+                guard let facial = AgentPortrait.faceSkin(face, skin: skin, width: width, height: height) else { continue }
+                for index in skin.indices where facial[index] != 0 { skin[index] = 255 }
+            }
             return try MagicWand.outline(of: skin, width: width, height: height)
         default:
             let faces = try AgentPortrait.faces(in: image)
@@ -85,8 +90,8 @@ extension AgentTools {
             guard method == "face_skin" else { return outline }
             // Only skin: not hair over the forehead, glasses, or a hand on the cheek.
             let skin = AgentPortrait.skinMask(try AgentBitmap(image), faces: [face], person: nil)
-            guard let area = AgentPortrait.rasterized([outline], width: width, height: height) else { return outline }
-            return try MagicWand.outline(of: zip(area, skin).map { $0 != 0 && $1 != 0 ? 255 : 0 }, width: width, height: height)
+            guard let facial = AgentPortrait.faceSkin(face, skin: skin, width: width, height: height) else { return outline }
+            return try MagicWand.outline(of: facial, width: width, height: height)
         }
     }
 
