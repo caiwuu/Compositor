@@ -32,13 +32,13 @@ nonisolated enum FilterKind: String, CaseIterable, Sendable {
 
 /// Remove Background's two ways of working: Apple's own subject mask on its own, or that mask refined against the
 /// layer's detail, which recovers hair and fur but takes longer.
-nonisolated enum BackgroundQuality: String, CaseIterable, Sendable {
+nonisolated enum BackgroundQuality: String, CaseIterable, Codable, Sendable {
     case basic = "Basic"
     case advanced = "Advanced"
 }
 
 /// Every filter's settings; each filter reads only its own.
-nonisolated struct FilterSettings: Equatable, Sendable {
+nonisolated struct FilterSettings: Equatable, Codable, Sendable {
     /// Gaussian Blur radius in layer pixels (the blur's standard deviation), 0.1–250.
     var radius: Double = 1
     /// Motion Blur direction in degrees, counterclockwise from horizontal as in Photoshop, −90–90.

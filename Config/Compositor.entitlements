@@ -8,6 +8,16 @@
     <true/>
     <key>com.apple.security.network.client</key>
     <true/>
+    <!-- The MCP server AI agents connect to, on this Mac only (127.0.0.1). -->
+    <key>com.apple.security.network.server</key>
+    <true/>
+    <!-- Where agents open and save files without a panel; other folders are granted in Compositor > MCP Server…. -->
+    <key>com.apple.security.assets.pictures.read-write</key>
+    <true/>
+    <key>com.apple.security.files.downloads.read-write</key>
+    <true/>
+    <key>com.apple.security.files.bookmarks.app-scope</key>
+    <true/>
     <!-- Sparkle installs updates through its helper services, which a sandboxed app reaches by name. -->
     <key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
     <array>

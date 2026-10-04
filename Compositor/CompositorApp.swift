@@ -94,6 +94,7 @@ struct CompositorApp: App {
                 Group {
                     CommandGroup(after: .appInfo) {
                         Button("Check for Updates…") { applicationDelegate.updater.checkForUpdates(nil) }
+                        Button("MCP Server…") { AgentSettingsWindow.show() }
                         Picker("Language", selection: Binding(get: { AppLanguage.current }, set: { language in
                             AppLanguage.choose(language) { applicationDelegate.restart() }
                         })) {
