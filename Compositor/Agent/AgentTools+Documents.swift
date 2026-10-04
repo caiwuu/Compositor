@@ -241,8 +241,8 @@ extension AgentTools {
         }
         guard !names.isEmpty else { throw AgentError(undo ? "There’s nothing to undo." : "There’s nothing to redo.") }
         return AgentResult(value: [undo ? "undone" : "redone": names,
-                                   "undo": session.history.canUndo ? session.history.undoName : NSNull(),
-                                   "redo": session.history.canRedo ? session.history.redoName : NSNull()])
+                                   "undo": session.history.canUndo ? session.history.undoName as Any : NSNull(),
+                                   "redo": session.history.canRedo ? session.history.redoName as Any : NSNull()])
     }
 
     private func describeSettings(_ arguments: AgentArguments) throws -> AgentResult {
