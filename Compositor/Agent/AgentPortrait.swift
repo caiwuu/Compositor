@@ -79,7 +79,7 @@ nonisolated enum AgentPortrait {
             return path
         }
         func union(_ paths: [CGPath?]) -> CGPath? {
-            paths.compactMap { $0 }.reduce(nil as CGPath?) { $0.map { $0.union($1, using: .winding) } ?? $1 }
+            paths.compactMap { $0 }.reduce(nil as CGPath?) { sum, path in sum.map { $0.union(path, using: .winding) } ?? path }
         }
         // Eyebrows are thin outlines; given some thickness they cover the hairs.
         func brow(_ key: String) -> CGPath? {
