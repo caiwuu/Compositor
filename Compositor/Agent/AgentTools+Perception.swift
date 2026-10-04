@@ -369,7 +369,9 @@ extension AgentTools {
             context.closePath()
             context.strokePath()
             if let first = points.min(by: { $0.y + $0.x < $1.y + $1.x }) {
-                tag(outline.name, at: CGPoint(x: max(0, first.x), y: max(0, first.y - 16)), color: color)
+                // Kept clear of the grid's labels along the top and left edges.
+                let inset: CGFloat = grid == nil ? 0 : 18
+                tag(outline.name, at: CGPoint(x: max(inset * 2, first.x), y: max(inset + CGFloat(index) * 16, first.y - 16)), color: color)
             }
         }
         guard let image = context.makeImage() else { throw ExportError.render }
