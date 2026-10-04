@@ -710,6 +710,12 @@ final class BrushStroke {
         }
     }
 
+    /// Runs `draw` once over the canvas (or the selection) in document coordinates, starting from the original
+    /// pixels; a second call replaces the first.
+    func paint(_ draw: (CGContext) throws -> Void) throws {
+        try paintCanvas(draw)
+    }
+
     /// Erases image pixels to transparency inside the selection, only where pixels exist.
     func clearPixels() throws {
         try paintCanvas(withinSource: true) { context in

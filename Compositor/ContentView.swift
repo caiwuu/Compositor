@@ -345,10 +345,26 @@ struct ContentView: View {
             } else {
                 Text(toolHint)
             }
+            agentStatus
         }
         .font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary)
         .padding(.horizontal, 18).frame(height: 30)
         .accessibilityElement(children: .contain)
+    }
+    /// While the MCP server is on: what a connected agent is doing. Clicking opens its window.
+    @ViewBuilder private var agentStatus: some View {
+        let server = AgentServer.shared
+        if server.state == .listening {
+            Button { AgentSettingsWindow.show() } label: {
+                if let tool = server.runningTool {
+                    Label(String(localized: "AI: \(tool)…"), systemImage: "sparkles").foregroundStyle(Color.accentColor)
+                } else {
+                    Label("MCP", systemImage: "sparkles")
+                }
+            }
+            .buttonStyle(.plain)
+            .help("An AI agent can connect to Compositor. Click for the MCP Server settings.")
+        }
     }
     /// The status bar's reminder of what the current tool does. Each line is whole, so it translates as one sentence.
     private var toolHint: String {

@@ -37,8 +37,22 @@ final class ProjectController {
         return await write(prepared.snapshot, to: prepared.destination, revision: prepared.revision)
     }
 
+    /// Saves to `destination` with no panel or alert, for an AI agent over MCP; a failure is thrown to it instead.
+    /// False when another project operation is under way.
+    func save(to destination: URL) async throws -> Bool {
+        guard session.document != nil else { return false }
+        await finishWriting()
+        guard begin() else { return false }
+        let revision = session.history.currentRevision
+        let snapshot = session.projectSnapshot()
+        session.isProjectBusy = false
+        guard let snapshot else { return false }
+        try await writeResult(snapshot, to: destination, revision: revision).get()
+        return true
+    }
+
     /// The save still writing, if any. Close, quit and replacing the document wait for it.
-    private var writing: Task<Bool, Never>?
+    private var writing: Task<Result<Void, Error>, Never>?
     func finishWriting() async { if let writing { _ = await writing.value } }
 
     func exportPNG() async {
@@ -220,7 +234,16 @@ final class ProjectController {
 
     /// Writes a captured document in the background. Only that captured version counts as saved.
     private func write(_ snapshot: ProjectSnapshot, to destination: URL, revision: UUID) async -> Bool {
-        let task = Task { @MainActor [self] () -> Bool in
+        switch await writeResult(snapshot, to: destination, revision: revision) {
+        case .success: return true
+        case .failure(let error):
+            await showError(String(localized: "Couldn’t save the project"), error: error)
+            return false
+        }
+    }
+
+    private func writeResult(_ snapshot: ProjectSnapshot, to destination: URL, revision: UUID) async -> Result<Void, Error> {
+        let task = Task { @MainActor [self] () -> Result<Void, Error> in
             let scoped = destination.startAccessingSecurityScopedResource()
             defer { if scoped { destination.stopAccessingSecurityScopedResource() } }
             // Our own save changes the package too; the watch ignores events until the saved bytes are remembered.
@@ -235,16 +258,15 @@ final class ProjectController {
                 RecentProjects.shared.note(destination)
                 await rememberProjectDigest(for: destination)
                 watchProject(at: destination)
-                return true
+                return .success(())
             } catch {
-                await showError(String(localized: "Couldn’t save the project"), error: error)
-                return false
+                return .failure(error)
             }
         }
         writing = task
-        let saved = await task.value
+        let result = await task.value
         if writing == task { writing = nil }
-        return saved
+        return result
     }
 
     @discardableResult
