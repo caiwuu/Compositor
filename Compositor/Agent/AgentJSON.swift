@@ -192,10 +192,27 @@ nonisolated enum AgentCoding {
 
     /// Pretty JSON text for a tool result.
     static func text(_ value: Any) -> String {
+        let value = clean(value)
         guard JSONSerialization.isValidJSONObject(value),
               let data = try? JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]),
               let text = String(data: data, encoding: .utf8) else { return "\(value)" }
         return text
+    }
+
+    /// Optionals unwrapped (nil as null), and fractions to four places as written, so 0.6 doesn't come out as
+    /// 0.59999999999999998.
+    static func clean(_ value: Any) -> Any {
+        let mirror = Mirror(reflecting: value)
+        if mirror.displayStyle == .optional { return mirror.children.first.map { clean($0.value) } ?? NSNull() }
+        switch value {
+        case let object as [String: Any]: return object.mapValues(clean)
+        case let array as [Any]: return array.map(clean)
+        case let number as NSNumber where !AgentArguments.isBool(number) && CFNumberIsFloatType(number as CFNumber):
+            let double = number.doubleValue
+            guard double.isFinite else { return NSNull() }
+            return NSDecimalNumber(string: String((double * 10_000).rounded() / 10_000))
+        default: return value
+        }
     }
 }
 

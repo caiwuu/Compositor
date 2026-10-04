@@ -243,6 +243,26 @@
         }
       }
     },
+    "AI agents connected over MCP will be able to read and write files in this folder." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通过 MCP 连接的 AI 代理将可以读写此文件夹中的文件。"
+          }
+        }
+      }
+    },
+    "AI: %@…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI：%@…"
+          }
+        }
+      }
+    },
     "ASCII" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -291,6 +311,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "添加%@"
+          }
+        }
+      }
+    },
+    "Add Folder…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加文件夹…"
           }
         }
       }
@@ -373,6 +403,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "添加到“%@”"
+          }
+        }
+      }
+    },
+    "Address" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "地址"
           }
         }
       }
@@ -468,6 +508,16 @@
         }
       }
     },
+    "Agents set up with the old token must be set up again." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用旧令牌设置的代理需要重新设置。"
+          }
+        }
+      }
+    },
     "Align %@" : {
       "localizations" : {
         "zh-Hans" : {
@@ -508,12 +558,42 @@
         }
       }
     },
+    "Allow" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "允许"
+          }
+        }
+      }
+    },
+    "Allow AI agents to connect" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "允许 AI 代理连接"
+          }
+        }
+      }
+    },
     "Amount" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "数量"
+          }
+        }
+      }
+    },
+    "An AI agent can connect to Compositor. Click for the MCP Server settings." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI 代理可以连接到 Compositor。点按以打开 MCP 服务器设置。"
           }
         }
       }
@@ -832,6 +912,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bayer 8 × 8"
+          }
+        }
+      }
+    },
+    "Besides your Pictures and Downloads folders and the projects you have open." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "除了“图片”和“下载”文件夹以及已打开的项目之外。"
           }
         }
       }
@@ -2209,6 +2299,46 @@
         }
       }
     },
+    "Copied the token." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已拷贝令牌。"
+          }
+        }
+      }
+    },
+    "Copied. Add it to ~/.codex/config.toml, then restart Codex." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已拷贝。将其添加到 ~/.codex/config.toml，然后重新启动 Codex。"
+          }
+        }
+      }
+    },
+    "Copied. Add it to ~/.cursor/mcp.json (merge it into \"mcpServers\" if the file has others), then turn on “compositor” in Cursor Settings > MCP." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已拷贝。将其添加到 ~/.cursor/mcp.json（如果文件中已有其他服务器，请合并到 \"mcpServers\" 中），然后在 Cursor 设置 > MCP 中打开“compositor”。"
+          }
+        }
+      }
+    },
+    "Copied. Run it in Terminal, then start Claude Code." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已拷贝。在“终端”中运行它，然后启动 Claude Code。"
+          }
+        }
+      }
+    },
     "Copy" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2225,6 +2355,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "拷贝%@"
+          }
+        }
+      }
+    },
+    "Copy Claude Code Command" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷贝 Claude Code 命令"
+          }
+        }
+      }
+    },
+    "Copy Codex Setup" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷贝 Codex 设置"
+          }
+        }
+      }
+    },
+    "Copy Cursor Setup" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷贝 Cursor 设置"
           }
         }
       }
@@ -3358,6 +3518,16 @@
         }
       }
     },
+    "Draw" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "绘制"
+          }
+        }
+      }
+    },
     "Draw Guides" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3471,6 +3641,16 @@
         }
       }
     },
+    "Each button copies what that agent needs, with this address and token." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每个按钮会拷贝对应代理所需的设置，包含此地址和令牌。"
+          }
+        }
+      }
+    },
     "Earliest response. Hue, saturation, and shadow tint move about half as far as Version 6." : {
       "localizations" : {
         "zh-Hans" : {
@@ -3537,6 +3717,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "编辑调整…"
+          }
+        }
+      }
+    },
+    "Edit Layer" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑图层"
           }
         }
       }
@@ -4057,6 +4247,16 @@
         }
       }
     },
+    "Flip Canvas" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻转画布"
+          }
+        }
+      }
+    },
     "Flip Canvas Horizontal" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4184,6 +4384,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不支持文件夹混合模式“%@”。该文件夹将使用“穿透”。"
+          }
+        }
+      }
+    },
+    "Folders agents can use" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代理可使用的文件夹"
           }
         }
       }
@@ -5775,6 +5985,16 @@
         }
       }
     },
+    "Let AI agents such as Cursor, Claude Code or Codex see and edit your open documents. They connect on this Mac only, with the token below, and every change they make shows on the canvas and can be undone." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让 Cursor、Claude Code 或 Codex 等 AI 代理查看和编辑你打开的文稿。它们只能在这台 Mac 上凭下方的令牌连接，所做的每项更改都会显示在画布上，并且可以撤销。"
+          }
+        }
+      }
+    },
     "Levels" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6266,6 +6486,36 @@
         }
       }
     },
+    "MCP" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP"
+          }
+        }
+      }
+    },
+    "MCP Server" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP 服务器"
+          }
+        }
+      }
+    },
+    "MCP Server…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP 服务器…"
+          }
+        }
+      }
+    },
     "Mac Patterns" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6660,6 +6910,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "中间调"
+          }
+        }
+      }
+    },
+    "Missing or wrong token. Copy the setup from Compositor > MCP Server…." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "令牌缺失或错误。请从 Compositor > MCP 服务器… 中拷贝设置。"
           }
         }
       }
@@ -7067,6 +7327,16 @@
         }
       }
     },
+    "New Token" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新令牌"
+          }
+        }
+      }
+    },
     "New adjustment layer" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7260,6 +7530,16 @@
         }
       }
     },
+    "Nothing yet." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无记录。"
+          }
+        }
+      }
+    },
     "Nudge Down 1 px" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7436,6 +7716,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Y 位移"
+          }
+        }
+      }
+    },
+    "On" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已开启"
+          }
+        }
+      }
+    },
+    "On · %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已开启 · %@"
           }
         }
       }
@@ -8035,6 +8335,26 @@
         }
       }
     },
+    "Port" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "端口"
+          }
+        }
+      }
+    },
+    "Port %lld is in use by another app. Choose another port." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "端口 %lld 已被其他应用占用。请选择其他端口。"
+          }
+        }
+      }
+    },
     "Position" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8451,6 +8771,16 @@
         }
       }
     },
+    "Recent activity" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近活动"
+          }
+        }
+      }
+    },
     "Rectangle" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8731,6 +9061,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "将此曲线替换为直线或对比度曲线。"
+          }
+        }
+      }
+    },
+    "Requests from web pages aren’t allowed." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不允许来自网页的请求。"
           }
         }
       }
@@ -9179,6 +9519,16 @@
         }
       }
     },
+    "Select Object" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择对象"
+          }
+        }
+      }
+    },
     "Select Subject" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9316,6 +9666,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已选择"
+          }
+        }
+      }
+    },
+    "Set up an agent" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置代理"
           }
         }
       }
@@ -9958,6 +10318,16 @@
         }
       }
     },
+    "Starting…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在启动…"
+          }
+        }
+      }
+    },
     "Stop viewing the mask" : {
       "localizations" : {
         "zh-Hans" : {
@@ -10472,6 +10842,16 @@
         }
       }
     },
+    "The port isn’t valid." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "端口无效。"
+          }
+        }
+      }
+    },
     "The smart object was rasterized. Linked contents can’t be edited." : {
       "localizations" : {
         "zh-Hans" : {
@@ -10671,6 +11051,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "切换色阶预览"
+          }
+        }
+      }
+    },
+    "Token" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "令牌"
           }
         }
       }

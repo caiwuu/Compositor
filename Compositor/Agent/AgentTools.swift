@@ -149,7 +149,7 @@ final class AgentTools {
         let session = tab.session
         var summary: JSONObject = ["document_id": tab.id.uuidString, "title": tab.title,
                                    "on_screen": tab.id == workspace.current.id, "unsaved_changes": session.isModified,
-                                   "path": session.projectURL?.path ?? NSNull()]
+                                   "path": Self.orNull(session.projectURL?.path)]
         if let document = session.document {
             summary["width"] = document.width
             summary["height"] = document.height
@@ -165,7 +165,7 @@ final class AgentTools {
         let session = tab.session
         guard let document = session.document else { return result }
         result["resolution"] = document.resolution
-        result["active_layer_id"] = session.activeLayerID?.uuidString ?? NSNull()
+        result["active_layer_id"] = Self.orNull(session.activeLayerID?.uuidString)
         result["selected_layer_ids"] = session.selectedLayerIDs.map(\.uuidString).sorted()
         result["selection"] = selectionJSON(session)
         result["foreground_color"] = AgentColor.hex(session.foregroundColor)
@@ -187,7 +187,7 @@ final class AgentTools {
             : layer.liveText != nil ? "text" : layer.liveShape != nil ? "shape" : layer.asset == nil ? "empty" : "pixels"
         var json: JSONObject = [
             "id": layer.id.uuidString, "name": layer.name, "kind": kind, "depth": depth,
-            "parent_id": layer.parentID?.uuidString ?? NSNull(), "visible": layer.isVisible, "shown": shown,
+            "parent_id": Self.orNull(layer.parentID?.uuidString), "visible": layer.isVisible, "shown": shown,
             "opacity": layer.opacity, "blend_mode": layer.blendMode.rawValue,
             "x": layer.transform.origin.x, "y": layer.transform.origin.y,
             "width": layer.transform.size.width, "height": layer.transform.size.height,
@@ -202,14 +202,17 @@ final class AgentTools {
             json["text"] = ["content": text.style.content, "font": text.style.fontName, "size": text.style.fontSize,
                             "color": AgentColor.hex(red: text.style.red, green: text.style.green, blue: text.style.blue),
                             "alignment": text.style.alignment.rawValue, "tracking": text.style.tracking, "leading": text.style.leading,
-                            "box_width": text.style.boxSize?.width ?? NSNull(), "box_height": text.style.boxSize?.height ?? NSNull()]
+                            "box_width": Self.orNull(text.style.boxSize?.width), "box_height": Self.orNull(text.style.boxSize?.height)]
         }
         if let shape = layer.liveShape {
             json["shape"] = ["kind": shape.style.kind.rawValue, "color": AgentColor.hex(shape.style.color),
-                             "corner_radius": shape.style.cornerRadius, "line_width": shape.style.lineWidth ?? NSNull()]
+                             "corner_radius": shape.style.cornerRadius, "line_width": Self.orNull(shape.style.lineWidth)]
         }
         return json
     }
+
+    /// JSON null for a missing value: an optional left in `Any` stays wrapped and can't be encoded.
+    nonisolated static func orNull(_ value: Any?) -> Any { value ?? NSNull() }
 
     func selectionJSON(_ session: EditorSession) -> Any {
         guard let selection = session.selection else { return NSNull() }
