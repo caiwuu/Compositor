@@ -6,43 +6,44 @@ import SwiftUI
 struct IndicatorlessScrollView<Content: View>: NSViewRepresentable {
     @ViewBuilder let content: () -> Content
 
-    func makeNSView(context: Context) -> Container {
-        Container(rootView: content())
+    func makeNSView(context: Context) -> IndicatorlessScrollContainer {
+        IndicatorlessScrollContainer(rootView: AnyView(content()))
     }
 
-    func updateNSView(_ view: Container, context: Context) {
-        view.host.rootView = content()
+    func updateNSView(_ view: IndicatorlessScrollContainer, context: Context) {
+        view.host.rootView = AnyView(content())
         view.host.invalidateIntrinsicContentSize()
         view.updateDocumentSize()
     }
+}
 
-    final class Container: NSScrollView {
-        let host: NSHostingView<Content>
+/// Not nested in the generic view: as a generic class its deinit crashes the Release optimizer (Swift 6.3.3).
+final class IndicatorlessScrollContainer: NSScrollView {
+    let host: NSHostingView<AnyView>
 
-        init(rootView: Content) {
-            host = NSHostingView(rootView: rootView)
-            super.init(frame: .zero)
-            drawsBackground = false
-            borderType = .noBorder
-            hasVerticalScroller = false
-            hasHorizontalScroller = false
-            horizontalScrollElasticity = .none
-            documentView = host
-            updateDocumentSize()
-        }
+    init(rootView: AnyView) {
+        host = NSHostingView(rootView: rootView)
+        super.init(frame: .zero)
+        drawsBackground = false
+        borderType = .noBorder
+        hasVerticalScroller = false
+        hasHorizontalScroller = false
+        horizontalScrollElasticity = .none
+        documentView = host
+        updateDocumentSize()
+    }
 
-        required init?(coder: NSCoder) { nil }
+    required init?(coder: NSCoder) { nil }
 
-        override func layout() {
-            super.layout()
-            updateDocumentSize()
-        }
+    override func layout() {
+        super.layout()
+        updateDocumentSize()
+    }
 
-        func updateDocumentSize() {
-            let height = host.fittingSize.height
-            let size = NSSize(width: 56, height: height)
-            if host.frame.size != size { host.setFrameSize(size) }
-            verticalScrollElasticity = height > contentView.bounds.height + 1 ? .allowed : .none
-        }
+    func updateDocumentSize() {
+        let height = host.fittingSize.height
+        let size = NSSize(width: 56, height: height)
+        if host.frame.size != size { host.setFrameSize(size) }
+        verticalScrollElasticity = height > contentView.bounds.height + 1 ? .allowed : .none
     }
 }
