@@ -53,7 +53,7 @@ nonisolated enum AgentVision {
             do { try handler.perform([request]) } catch { failures[name(of: request)] = error.localizedDescription }
         }
 
-        let needsFaces = !features.isDisjoint(with: ["faces", "skin"])
+        let needsFaces = !features.isDisjoint(with: ["faces", "skin", "arms"])
         let faces = needsFaces ? try AgentPortrait.faces(in: image) : []
         if features.contains("faces") {
             let qualities = quality.results ?? []
@@ -69,6 +69,8 @@ nonisolated enum AgentVision {
         }
         let needsPerson = !features.isDisjoint(with: ["arms", "skin"])
         let person = needsPerson ? try AgentPortrait.personMask(image) : nil
+        let bitmap = needsPerson ? try AgentBitmap(image) : nil
+        let skin = bitmap.map { AgentPortrait.skinMask($0, faces: faces, person: person) }
         if !features.isDisjoint(with: ["pose", "arms"]) {
             let poses = try AgentPortrait.poses(in: image)
             if features.contains("pose") {
@@ -77,13 +79,11 @@ nonisolated enum AgentVision {
                                         "confidence": $0.confidence] as JSONObject }
                 }
             }
-            if features.contains("arms"), let person {
-                result["arms"] = poses.map { AgentPortrait.arms($0, person: person, width: image.width, height: image.height, offset: offset) }
+            if features.contains("arms"), let person, let skin {
+                result["arms"] = poses.map { AgentPortrait.arms($0, person: person, skin: skin, width: image.width, height: image.height, offset: offset) }
             }
         }
-        if features.contains("skin") {
-            let bitmap = try AgentBitmap(image)
-            let skin = AgentPortrait.skinMask(bitmap, faces: faces, person: person)
+        if features.contains("skin"), let bitmap, let skin {
             result["skin"] = faces.enumerated().map { index, face -> JSONObject in
                 var report: JSONObject = ["face_index": index]
                 if let outline = AgentPortrait.path(of: "face_skin", in: face),

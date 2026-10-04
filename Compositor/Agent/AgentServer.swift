@@ -272,8 +272,9 @@ final class AgentServer {
     sample_pixels reads colors and which layers make them; detect finds faces, text, subjects, salient regions and \
     the horizon; compare shows and measures what your last steps changed. A picture alone is a poor judge of exact \
     values and positions, so use the numbers. Portraits: detect faces (contours), pose, arms and skin (spots); \
-    smart_select face parts, skin and person (feathered) to work on just them; warp moves edges to slim; brush_stroke \
-    paints, heals spots and clones; smooth_skin softens skin; check a warp with compare outside_selection. Retouch on \
+    smart_select face parts, skin and person (feathered) to work on just them; warp moves edges to slim (with the \
+    background free to move in); brush_stroke paints, heals spots and clones; smooth_skin softens skin; check a warp \
+    with compare outside_selection. Retouch on \
     a duplicate layer so it can be toned down. Prefer non-destructive work: adjustment \
     layers, masks (layer_mask, Remove Background), text and shape layers stay editable. Filters and draw change a \
     pixel layer inside the selection if there is one. describe_settings lists filter, adjustment and effect settings \

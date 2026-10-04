@@ -186,24 +186,26 @@ nonisolated enum AgentPortrait {
             return (128 - 0.168736 * r - 0.331264 * g + 0.5 * b, 128 + 0.5 * r - 0.418688 * g - 0.081312 * b, 0.299 * r + 0.587 * g + 0.114 * b)
         }
         // The faces' skin sets what counts, so dark, light, warm and cool skin are all found.
-        var cb = (mean: 110.0, spread: 9.0), cr = (mean: 152.0, spread: 11.0)
+        var cb = (mean: 110.0, spread: 9.0), cr = (mean: 152.0, spread: 11.0), darkest = 25.0
         let samples = faces.compactMap { path(of: "face_skin", in: $0) }
         if !samples.isEmpty, let sample = rasterized(samples, width: width, height: height) {
-            var n = 0.0, sb = 0.0, sr = 0.0, sb2 = 0.0, sr2 = 0.0
+            var n = 0.0, sb = 0.0, sr = 0.0, sb2 = 0.0, sr2 = 0.0, sy = 0.0
             for index in 0..<(width * height) where sample[index] != 0 && bitmap.bytes[index * 4 + 3] > 200 {
                 let c = chroma(index)
-                n += 1; sb += c.cb; sr += c.cr; sb2 += c.cb * c.cb; sr2 += c.cr * c.cr
+                n += 1; sb += c.cb; sr += c.cr; sb2 += c.cb * c.cb; sr2 += c.cr * c.cr; sy += c.y
             }
             if n > 50 {
                 cb = (sb / n, max(4, (sb2 / n - (sb / n) * (sb / n)).squareRoot()))
                 cr = (sr / n, max(4, (sr2 / n - (sr / n) * (sr / n)).squareRoot()))
+                // Dark hair can share skin's hue; skin in shadow is rarely under half the face's brightness.
+                darkest = max(darkest, sy / n * 0.5)
             }
         }
         var mask = [UInt8](repeating: 0, count: width * height)
         for index in 0..<(width * height) where bitmap.bytes[index * 4 + 3] > 128 && (person.map { $0[index] != 0 } ?? true) {
             let c = chroma(index)
             let distance = pow((c.cb - cb.mean) / cb.spread, 2) + pow((c.cr - cr.mean) / cr.spread, 2)
-            if distance < 6.25, c.y > 25 { mask[index] = 255 }
+            if distance < 6.25, c.y > darkest { mask[index] = 255 }
         }
         return majority(mask, width: width, height: height, radius: 2)
     }
@@ -271,12 +273,16 @@ nonisolated enum AgentPortrait {
         }
     }
 
-    /// Across each arm at a few places along the upper arm and forearm: the arm's two edges in `person`, and its width
-    /// there. An edge that runs into the body (or past where an arm could reach) is marked, as its width is no guide.
-    static func arms(_ pose: [String: (point: CGPoint, confidence: Float)], person: [UInt8], width: Int, height: Int, offset: CGPoint) -> JSONObject {
+    /// Across each arm at a few places along the upper arm and forearm: the arm's two edges, and its width there. A bare
+    /// arm ends where its skin does, which parts it from clothes and a body it rests against; a sleeve ends where the
+    /// person does. An edge that runs into the body (or past where an arm could reach) is marked, as its width is no guide.
+    static func arms(_ pose: [String: (point: CGPoint, confidence: Float)], person: [UInt8], skin: [UInt8], width: Int, height: Int,
+                     offset: CGPoint) -> JSONObject {
+        var bare = false
         func inside(_ p: CGPoint) -> Bool {
             let x = Int(p.x), y = Int(p.y)
-            return (0..<width).contains(x) && (0..<height).contains(y) && person[y * width + x] != 0
+            guard (0..<width).contains(x), (0..<height).contains(y) else { return false }
+            return (bare ? skin : person)[y * width + x] != 0
         }
         func round(_ p: CGPoint) -> [Double] { [Double((p.x + offset.x).rounded()), Double((p.y + offset.y).rounded())] }
         var result: JSONObject = [:]
@@ -291,7 +297,9 @@ nonisolated enum AgentPortrait {
                 var samples: [JSONObject] = []
                 for t in [0.2, 0.35, 0.5, 0.65, 0.8] {
                     let center = CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
+                    bare = false
                     guard inside(center) else { continue }
+                    bare = skin[Int(center.y) * width + Int(center.x)] != 0
                     func edge(_ sign: CGFloat) -> (point: CGPoint, open: Bool) {
                         var distance: CGFloat = 0
                         while distance < reach {
@@ -306,6 +314,7 @@ nonisolated enum AgentPortrait {
                                               "width": Double(hypot(one.point.x - two.point.x, one.point.y - two.point.y).rounded())]
                     if one.open { sample["edge_a_touches_body"] = true }
                     if two.open { sample["edge_b_touches_body"] = true }
+                    if bare { sample["bare"] = true }
                     samples.append(sample)
                 }
                 segments.append(["segment": name, "from": round(a), "to": round(b), "across": [Double(across.x), Double(across.y)], "samples": samples])
@@ -325,52 +334,77 @@ nonisolated enum AgentPortrait {
             .intersection(CGRect(x: 0, y: 0, width: width, height: height))
         guard !box.isNull, box.width > 8, box.height > 8 else { return [:] }
         let x0 = Int(box.minX), y0 = Int(box.minY), w = Int(box.width), h = Int(box.height)
-        var luma = [Double](repeating: 0, count: w * h), inside = [Bool](repeating: false, count: w * h)
+        var luma = [Double](repeating: 0, count: w * h), redness = [Double](repeating: 0, count: w * h)
+        var inside = [Bool](repeating: false, count: w * h)
         var n = 0.0, sr = 0.0, sg = 0.0, sb = 0.0, sl = 0.0, sl2 = 0.0, red = 0.0
         for y in 0..<h {
             for x in 0..<w {
                 let index = (y + y0) * width + x + x0
                 let p = bitmap.pixel(x + x0, y + y0)
                 let l = 0.2126 * Double(p.r) + 0.7152 * Double(p.g) + 0.0722 * Double(p.b)
+                let cr = 0.5 * Double(p.r) - 0.418688 * Double(p.g) - 0.081312 * Double(p.b)
                 luma[y * w + x] = l
+                redness[y * w + x] = cr
                 guard skin[index] != 0 else { continue }
                 inside[y * w + x] = true
                 n += 1; sr += Double(p.r); sg += Double(p.g); sb += Double(p.b); sl += l; sl2 += l * l
-                red += 128 + 0.5 * Double(p.r) - 0.418688 * Double(p.g) - 0.081312 * Double(p.b) - 128
+                red += cr
             }
         }
         guard n > 100 else { return ["note": "Too little skin showing on this face to measure."] }
-        // Spots stand out from the skin around them: the luminance against a local average a spot or two across.
-        let radius = max(3, Int(face.eyeWidth * 0.35))
-        var sums = [Double](repeating: 0, count: (w + 1) * (h + 1)), counts = [Double](repeating: 0, count: (w + 1) * (h + 1))
+        func integral(_ value: (Int) -> Double) -> [Double] {
+            var sums = [Double](repeating: 0, count: (w + 1) * (h + 1))
+            for y in 0..<h {
+                var row = 0.0
+                for x in 0..<w {
+                    row += value(y * w + x)
+                    sums[(y + 1) * (w + 1) + x + 1] = sums[y * (w + 1) + x + 1] + row
+                }
+            }
+            return sums
+        }
+        func total(_ sums: [Double], _ x: Int, _ y: Int, _ radius: Int) -> Double {
+            let a = max(0, y - radius), b = min(h, y + radius + 1), c = max(0, x - radius), d = min(w, x + radius + 1)
+            return sums[b * (w + 1) + d] - sums[a * (w + 1) + d] - sums[b * (w + 1) + c] + sums[a * (w + 1) + c]
+        }
+        let counts = integral { inside[$0] ? 1 : 0 }
+        let lumas = integral { inside[$0] ? luma[$0] : 0 }, reds = integral { inside[$0] ? redness[$0] : 0 }
+        // Spots are only looked for well inside the skin, where the edges of eyes, nostrils, lips and hair can't pass for one.
+        let margin = max(2, Int(face.eyeWidth * 0.12))
+        var nostrils = [UInt8](repeating: 0, count: w * h)
+        if let nose = face.regions["nose"], nose.count >= 3 {
+            let shifted = nose.map { CGPoint(x: $0.x - CGFloat(x0), y: $0.y - CGFloat(y0)) }
+            let outline = closed(shifted)
+            let grown = outline.union(outline.copy(strokingWithWidth: face.eyeWidth * 0.3, lineCap: .round, lineJoin: .round, miterLimit: 1))
+            nostrils = rasterized([grown], width: w, height: h) ?? nostrils
+        }
+        var candidate = [Bool](repeating: false, count: w * h)
         for y in 0..<h {
-            var row = 0.0, rowCount = 0.0
-            for x in 0..<w {
-                if inside[y * w + x] { row += luma[y * w + x]; rowCount += 1 }
-                sums[(y + 1) * (w + 1) + x + 1] = sums[y * (w + 1) + x + 1] + row
-                counts[(y + 1) * (w + 1) + x + 1] = counts[y * (w + 1) + x + 1] + rowCount
+            for x in 0..<w where inside[y * w + x] && nostrils[y * w + x] == 0 {
+                let side = min(h, y + margin + 1) - max(0, y - margin), across = min(w, x + margin + 1) - max(0, x - margin)
+                candidate[y * w + x] = total(counts, x, y, margin) == Double(side * across)
             }
         }
+        // Spots stand out from the skin around them, darker (moles, marks) or redder (blemishes), against a local
+        // average a few spots across.
+        let radius = max(3, Int(face.eyeWidth * 0.35))
         var contrast = [Double](repeating: 0, count: w * h)
         var deviations = 0.0, deviationCount = 0.0
         for y in 0..<h {
-            let a = max(0, y - radius), b = min(h, y + radius + 1)
-            for x in 0..<w where inside[y * w + x] {
-                let c = max(0, x - radius), d = min(w, x + radius + 1)
-                let total = sums[b * (w + 1) + d] - sums[a * (w + 1) + d] - sums[b * (w + 1) + c] + sums[a * (w + 1) + c]
-                let count = counts[b * (w + 1) + d] - counts[a * (w + 1) + d] - counts[b * (w + 1) + c] + counts[a * (w + 1) + c]
+            for x in 0..<w where candidate[y * w + x] {
+                let count = total(counts, x, y, radius)
                 guard count > 0 else { continue }
-                let value = total / count - luma[y * w + x]
+                let value = (total(lumas, x, y, radius) / count - luma[y * w + x]) + 1.5 * (redness[y * w + x] - total(reds, x, y, radius) / count)
                 contrast[y * w + x] = value
                 deviations += value * value; deviationCount += 1
             }
         }
         let sigma = (deviations / max(1, deviationCount)).squareRoot()
-        let threshold = max(7, sigma * 2.5)
+        let threshold = max(5, sigma * 2.2)
         let maxArea = Double.pi * pow(Double(face.eyeWidth) * 0.25, 2)
         var seen = [Bool](repeating: false, count: w * h)
         var spots: [(x: Double, y: Double, radius: Double, contrast: Double)] = []
-        for start in 0..<(w * h) where !seen[start] && inside[start] && contrast[start] > threshold {
+        for start in 0..<(w * h) where !seen[start] && candidate[start] && contrast[start] > threshold {
             var stack = [start], area = 0.0, cx = 0.0, cy = 0.0, depth = 0.0
             seen[start] = true
             while let index = stack.popLast() {
@@ -378,10 +412,10 @@ nonisolated enum AgentPortrait {
                 area += 1; cx += Double(x); cy += Double(y); depth = max(depth, contrast[index])
                 for (nx, ny) in [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)] where nx >= 0 && ny >= 0 && nx < w && ny < h {
                     let next = ny * w + nx
-                    if !seen[next], inside[next], contrast[next] > threshold * 0.6 { seen[next] = true; stack.append(next) }
+                    if !seen[next], candidate[next], contrast[next] > threshold * 0.6 { seen[next] = true; stack.append(next) }
                 }
             }
-            guard area >= 3, area <= maxArea else { continue }
+            guard area >= 2, area <= maxArea else { continue }
             spots.append((cx / area + Double(x0) + offset.x, cy / area + Double(y0) + offset.y, (area / .pi).squareRoot() + 1, depth))
         }
         spots.sort { $0.contrast * $0.radius > $1.contrast * $1.radius }
@@ -389,7 +423,7 @@ nonisolated enum AgentPortrait {
         return ["color": AgentColor.hex(red: sr / n / 255, green: sg / n / 255, blue: sb / n / 255),
                 "luminance": mean, "unevenness": (max(0, sl2 / n - mean * mean)).squareRoot(), "redness": red / n,
                 "pixels": Int(n),
-                "spots": spots.prefix(40).map { ["x": $0.x.rounded(), "y": $0.y.rounded(), "radius": ($0.radius * 10).rounded() / 10,
+                "spots": spots.prefix(60).map { ["x": $0.x.rounded(), "y": $0.y.rounded(), "radius": ($0.radius * 10).rounded() / 10,
                                                   "contrast": ($0.contrast * 10).rounded() / 10] as JSONObject }]
     }
 }
