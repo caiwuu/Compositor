@@ -41,7 +41,7 @@ extension AgentTools {
                     "steps_back": Schema.integer("How many undo steps back to compare with. Default 1, the last change.", minimum: 1, maximum: 100),
                     "threshold": Schema.number("How different a pixel has to be to count as changed, 0 to 1. Default 0.02.", minimum: 0, maximum: 1),
                     "max_size": Schema.integer("Longest side of each picture. Default 768.", minimum: 64, maximum: 2048),
-                    "outside_selection": Schema.boolean("Measure only outside the selection: select the person to check that a warp left the background alone."),
+                    "outside_selection": Schema.boolean("Measure only outside the selection: with the area a warp or retouch was meant to stay in still selected, check that nothing beyond it changed."),
                 ].merging(Schema.rect("the part to compare")) { a, _ in a }), readOnly: true) { [unowned self] arguments in
                     try await compare(arguments)
                 },

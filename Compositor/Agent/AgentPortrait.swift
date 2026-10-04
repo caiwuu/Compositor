@@ -275,7 +275,8 @@ nonisolated enum AgentPortrait {
 
     /// Across each arm at a few places along the upper arm and forearm: the arm's two edges, and its width there. A bare
     /// arm ends where its skin does, which parts it from clothes and a body it rests against; a sleeve ends where the
-    /// person does. An edge that runs into the body (or past where an arm could reach) is marked, as its width is no guide.
+    /// person does. An edge that runs into the body (or past where an arm could reach) or stops at the picture's border is
+    /// marked, as its width is no guide, and left out of the traced edges.
     static func arms(_ pose: [String: (point: CGPoint, confidence: Float)], person: [UInt8], skin: [UInt8], width: Int, height: Int,
                      offset: CGPoint) -> JSONObject {
         var bare = false
@@ -302,26 +303,31 @@ nonisolated enum AgentPortrait {
                     bare = false
                     guard inside(center) else { continue }
                     bare = skin[Int(center.y) * width + Int(center.x)] != 0
-                    func edge(_ sign: CGFloat) -> (point: CGPoint, open: Bool) {
+                    func edge(_ sign: CGFloat) -> (point: CGPoint, open: Bool, frame: Bool) {
                         var distance: CGFloat = 0
                         while distance < reach {
                             let next = CGPoint(x: center.x + across.x * sign * (distance + 1), y: center.y + across.y * sign * (distance + 1))
-                            if !inside(next) { return (CGPoint(x: center.x + across.x * sign * distance, y: center.y + across.y * sign * distance), false) }
+                            if !inside(next) {
+                                let frame = !(0..<width).contains(Int(next.x)) || !(0..<height).contains(Int(next.y))
+                                return (CGPoint(x: center.x + across.x * sign * distance, y: center.y + across.y * sign * distance), false, frame)
+                            }
                             distance += 1
                         }
-                        return (CGPoint(x: center.x + across.x * sign * reach, y: center.y + across.y * sign * reach), true)
+                        return (CGPoint(x: center.x + across.x * sign * reach, y: center.y + across.y * sign * reach), true, false)
                     }
                     let one = edge(1), two = edge(-1)
                     if let middle {
                         let oneIsOuter = hypot(one.point.x - middle.x, one.point.y - middle.y) > hypot(two.point.x - middle.x, two.point.y - middle.y)
                         let (o, i) = oneIsOuter ? (one, two) : (two, one)
-                        if !o.open { outer.append(o.point) }
-                        if !i.open { inner.append(i.point) }
+                        if !o.open && !o.frame { outer.append(o.point) }
+                        if !i.open && !i.frame { inner.append(i.point) }
                     }
                     var sample: JSONObject = ["at": (t * 10).rounded() / 10, "center": round(center), "edge_a": round(one.point), "edge_b": round(two.point),
                                               "width": Double(hypot(one.point.x - two.point.x, one.point.y - two.point.y).rounded())]
                     if one.open { sample["edge_a_touches_body"] = true }
                     if two.open { sample["edge_b_touches_body"] = true }
+                    if one.frame { sample["edge_a_at_frame"] = true }
+                    if two.frame { sample["edge_b_at_frame"] = true }
                     if bare { sample["bare"] = true }
                     samples.append(sample)
                 }
