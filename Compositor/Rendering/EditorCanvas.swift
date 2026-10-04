@@ -542,6 +542,8 @@ final class CanvasView: NSView {
         let textTransform: LayerTransform?
         /// The mask shown by itself, which may be one the composite doesn't draw (disabled, or a folder's).
         let maskAlone: ObjectIdentifier?
+        /// The shape being dragged out, which the canvas draws above the active layer.
+        let shapeDraft: ShapeDraft?
     }
 
     @discardableResult
@@ -575,7 +577,7 @@ final class CanvasView: NSView {
                 DisplayState.FolderMask(id: $0.id, maskID: $0.mask?.enabledImage.map { ObjectIdentifier($0) },
                                         transform: session.displayedTransform(for: $0))
             }, textStyle: session.textDraft?.style, textTransform: session.textDraft == nil ? nil : inlineTextEditor?.shownTransform,
-            maskAlone: session.maskAloneLayer?.mask.map { ObjectIdentifier($0.asset.image) })
+            maskAlone: session.maskAloneLayer?.mask.map { ObjectIdentifier($0.asset.image) }, shapeDraft: session.shapeDraft)
         var changed = false
         if displayedState != state {
             if let previous = displayedState, previous.documentID == state.documentID,
@@ -1149,11 +1151,12 @@ final class CanvasView: NSView {
             }
         }
         // The shape being dragged out previews where its layer will go — above the active layer — rather than over
-        // everything, so the layers above it cover it as they will once it is made.
+        // everything, so the layers above it cover it as they will once it is made; or on top when that isn't drawn.
+        var drewShape = false
         func drawOwnWithDraft(_ id: UUID, _ context: CGContext) {
             drawOwn(id, context)
             guard id == session.activeLayerID else { return }
-            drawShapeDraft(scale: scale, center: center, in: context)
+            if !drewShape { drewShape = true; drawShapeDraft(scale: scale, center: center, in: context) }
             drawNewText(context)
         }
         // New text goes where its layer will: just above the active layer, or on top when that isn't drawn (a
@@ -1200,6 +1203,7 @@ final class CanvasView: NSView {
             let origin = center(transform.center)
             return { clip.apply(scale: scale, center: origin, in: $0) }
         }, in: context) { live.drawComposite($0, in: context) }
+        if !drewShape { drawShapeDraft(scale: scale, center: center, in: context) }
         drawNewText(context)
     }
 
@@ -3062,13 +3066,17 @@ extension CanvasView {
             return image.applyingFilter("CIBlendWithAlphaMask", parameters: [kCIInputBackgroundImageKey: CIImage.empty(),
                                                                              kCIInputMaskImageKey: coverage])
         }
-        // A shape being dragged out and new text go where their layers will: just above the active layer, or new text on
-        // top when that isn't drawn (see `drawLayers`).
+        // A shape being dragged out and new text go where their layers will: just above the active layer, or on top
+        // when that isn't drawn (see `drawLayers`).
+        var drewShape = false
         var drewNewText = false
         func drafts(after id: UUID, over image: CIImage) -> CIImage {
             guard id == session.activeLayerID else { return image }
             var result = image
-            if let shape = shapeDraftImage(placement: placement) { result = shape.composited(over: result) }
+            if !drewShape, let shape = shapeDraftImage(placement: placement) {
+                result = shape.composited(over: result)
+                drewShape = true
+            }
             if session.textDraft?.layerID == nil, let text = draftText, let placed = placement.place(text.image, transform: text.transform) {
                 result = placed.composited(over: result)
                 drewNewText = true
@@ -3115,6 +3123,7 @@ extension CanvasView {
             } else if unsupported { return nil }
             result = drafts(after: id, over: result)
         }
+        if !drewShape, let shape = shapeDraftImage(placement: placement) { result = shape.composited(over: result) }
         if !drewNewText, session.textDraft?.layerID == nil, let text = draftText,
            let placed = placement.place(text.image, transform: text.transform) {
             result = placed.composited(over: result)
