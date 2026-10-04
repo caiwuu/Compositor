@@ -189,16 +189,22 @@ nonisolated enum AgentPortrait {
         var cb = (mean: 110.0, spread: 9.0), cr = (mean: 152.0, spread: 11.0), darkest = 25.0
         let samples = faces.compactMap { path(of: "face_skin", in: $0) }
         if !samples.isEmpty, let sample = rasterized(samples, width: width, height: height) {
-            var n = 0.0, sb = 0.0, sr = 0.0, sb2 = 0.0, sr2 = 0.0, sy = 0.0
-            for index in 0..<(width * height) where sample[index] != 0 && bitmap.bytes[index * 4 + 3] > 200 {
-                let c = chroma(index)
-                n += 1; sb += c.cb; sr += c.cr; sb2 += c.cb * c.cb; sr2 += c.cr * c.cr; sy += c.y
-            }
-            if n > 50 {
-                cb = (sb / n, max(4, (sb2 / n - (sb / n) * (sb / n)).squareRoot()))
-                cr = (sr / n, max(4, (sr2 / n - (sr / n) * (sr / n)).squareRoot()))
+            let colors = (0..<(width * height)).filter { sample[$0] != 0 && bitmap.bytes[$0 * 4 + 3] > 200 }.map(chroma)
+            // Hair over the forehead and brows falls in the sample too; measuring again from only the colors near the
+            // first measure leaves it out, so it doesn't widen what counts as skin.
+            var kept = colors
+            for pass in 0..<3 {
+                let n = Double(kept.count)
+                guard n > 50 else { break }
+                let mb = kept.map(\.cb).reduce(0, +) / n, mr = kept.map(\.cr).reduce(0, +) / n
+                let vb = kept.map { ($0.cb - mb) * ($0.cb - mb) }.reduce(0, +) / n, vr = kept.map { ($0.cr - mr) * ($0.cr - mr) }.reduce(0, +) / n
+                // Cut at two spreads, a spread measures about 0.88 of itself.
+                let widen = pass == 0 ? 1 : 1.14
+                cb = (mb, max(3, vb.squareRoot() * widen)); cr = (mr, max(3, vr.squareRoot() * widen))
                 // Dark hair can share skin's hue; skin in shadow is rarely under half the face's brightness.
-                darkest = max(darkest, sy / n * 0.5)
+                darkest = max(25, kept.map(\.y).reduce(0, +) / n * 0.5)
+                guard pass < 2 else { break }
+                kept = colors.filter { pow(($0.cb - cb.mean) / cb.spread, 2) + pow(($0.cr - cr.mean) / cr.spread, 2) < 4 && $0.y > darkest }
             }
         }
         var mask = [UInt8](repeating: 0, count: width * height)
