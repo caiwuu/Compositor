@@ -102,4 +102,18 @@ struct ShapeToolTests {
         #expect(session.shapeDraft?.cornerRadius == 0, "ellipses take no radius")
         session.cancelShape()
     }
+
+    /// The canvas has to redraw as the shape grows, or it is dragged out unseen.
+    @Test func draggingAShapeRedrawsTheCanvas() {
+        let session = makeSession()
+        let view = CanvasView(session: session)
+        view.synchronizeDisplay()
+        session.beginShape(at: CGPoint(x: 10, y: 10))
+        session.dragShape(to: CGPoint(x: 40, y: 30), square: false, fromCenter: false)
+        #expect(view.synchronizeDisplay())
+        session.dragShape(to: CGPoint(x: 60, y: 50), square: false, fromCenter: false)
+        #expect(view.synchronizeDisplay())
+        session.cancelShape()
+        #expect(view.synchronizeDisplay())
+    }
 }
