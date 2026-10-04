@@ -213,7 +213,30 @@ nonisolated enum AgentPortrait {
             let distance = pow((c.cb - cb.mean) / cb.spread, 2) + pow((c.cr - cr.mean) / cr.spread, 2)
             if distance < 6.25, c.y > darkest { mask[index] = 255 }
         }
-        return majority(mask, width: width, height: height, radius: 2)
+        // Freckles, spots and moles are skin too, however unlike it in color.
+        let eye = faces.map(\.eyeWidth).max() ?? CGFloat(min(width, height)) * 0.03
+        return filled(majority(mask, width: width, height: height, radius: 2), width: width, height: height, upTo: Int(eye * eye * 0.25))
+    }
+
+    /// `mask` with the holes in it no bigger than `area` pixels filled in; gaps open to the picture's border stay.
+    private static func filled(_ mask: [UInt8], width: Int, height: Int, upTo area: Int) -> [UInt8] {
+        var result = mask, seen = [Bool](repeating: false, count: width * height)
+        for start in 0..<(width * height) where mask[start] == 0 && !seen[start] {
+            var stack = [start], region: [Int] = [], open = false
+            seen[start] = true
+            while let index = stack.popLast() {
+                region.append(index)
+                let x = index % width, y = index / width
+                if x == 0 || y == 0 || x == width - 1 || y == height - 1 { open = true }
+                for next in [x > 0 ? index - 1 : -1, x < width - 1 ? index + 1 : -1, y > 0 ? index - width : -1, y < height - 1 ? index + width : -1]
+                where next >= 0 && mask[next] == 0 && !seen[next] {
+                    seen[next] = true
+                    stack.append(next)
+                }
+            }
+            if !open && region.count <= area { for index in region { result[index] = 255 } }
+        }
+        return result
     }
 
     /// `paths` filled, one byte per pixel.
