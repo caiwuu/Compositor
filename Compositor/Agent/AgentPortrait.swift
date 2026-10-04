@@ -472,6 +472,15 @@ nonisolated enum AgentPortrait {
         let sigma = (deviations / max(1, deviationCount)).squareRoot()
         let threshold = max(5, sigma * 2.2)
         let maxArea = Double.pi * pow(Double(face.eyeWidth) * 0.25, 2)
+        // How much darker than its surroundings a place is, skin or not, averaged over a few pixels.
+        let allLumas = integral { luma[$0] }
+        func darkness(_ x: Double, _ y: Double) -> Double {
+            let ix = Int(x.rounded()), iy = Int(y.rounded())
+            guard (0..<w).contains(ix), (0..<h).contains(iy) else { return 0 }
+            let window = Double((min(h, iy + radius + 1) - max(0, iy - radius)) * (min(w, ix + radius + 1) - max(0, ix - radius)))
+            let near = Double((min(h, iy + 2) - max(0, iy - 1)) * (min(w, ix + 2) - max(0, ix - 1)))
+            return total(allLumas, ix, iy, radius) / window - total(allLumas, ix, iy, 1) / near
+        }
         var seen = [Bool](repeating: false, count: w * h)
         var spots: [(x: Double, y: Double, radius: Double, contrast: Double)] = []
         for start in 0..<(w * h) where !seen[start] && candidate[start] && contrast[start] > threshold {
@@ -493,6 +502,15 @@ nonisolated enum AgentPortrait {
             let spread = ((vx - vy) * (vx - vy) + 4 * cxy * cxy).squareRoot()
             let long = (vx + vy + spread) / 2, short = (vx + vy - spread) / 2
             guard area < 6 || long <= max(short, 0.25) * 4 else { continue }
+            // A spot ends where it ends; a glasses wire, a strand of hair or a wrinkle carries on dark to both sides.
+            let reach = max(3, 2.5 * ((area / .pi).squareRoot() + 1))
+            let line = (0..<8).contains { step in
+                let angle = Double(step) * .pi / 8
+                return [1.0, -1.0].allSatisfy { sign in
+                    darkness(mx + cos(angle) * reach * sign, my + sin(angle) * reach * sign) > threshold * 0.5
+                }
+            }
+            guard !line else { continue }
             spots.append((cx / area + Double(x0) + offset.x, cy / area + Double(y0) + offset.y, (area / .pi).squareRoot() + 1, depth))
         }
         spots.sort { $0.contrast * $0.radius > $1.contrast * $1.radius }
