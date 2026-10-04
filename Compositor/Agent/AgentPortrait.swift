@@ -147,13 +147,19 @@ nonisolated enum AgentPortrait {
 
     // MARK: The person and their skin
 
-    /// Where people are, one byte per pixel of `image` (255 is a person), with edges following the picture's.
+    /// Where people are, one byte per pixel of `image` (255 is a person), with edges following the picture's. Empty when
+    /// no person is found: segmentation alone marks something in any picture.
     static func personMask(_ image: CGImage) throws -> [UInt8] {
+        let empty = [UInt8](repeating: 0, count: image.width * image.height)
+        let humans = VNDetectHumanRectanglesRequest()
+        humans.upperBodyOnly = false
         let request = VNGeneratePersonSegmentationRequest()
         request.qualityLevel = .accurate
         request.outputPixelFormat = kCVPixelFormatType_OneComponent8
-        try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
-        guard let buffer = request.results?.first?.pixelBuffer else { return [UInt8](repeating: 0, count: image.width * image.height) }
+        let faces = VNDetectFaceRectanglesRequest()
+        try VNImageRequestHandler(cgImage: image, options: [:]).perform([humans, faces, request])
+        guard humans.results?.isEmpty == false || faces.results?.isEmpty == false else { return empty }
+        guard let buffer = request.results?.first?.pixelBuffer else { return empty }
         let coarse = CIImage(cvPixelBuffer: buffer)
         var refined = coarse.transformed(by: CGAffineTransform(scaleX: CGFloat(image.width) / coarse.extent.width,
                                                                y: CGFloat(image.height) / coarse.extent.height))

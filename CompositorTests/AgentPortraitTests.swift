@@ -88,6 +88,7 @@ struct AgentPortraitTests {
         let tools = AgentTools(workspace: ProjectWorkspace())
         try await redBlock(tools)
         await #expect(throws: AgentError.self) { try await tools.call("smart_select", ["method": "lips"]) }
+        await #expect(throws: AgentError.self) { try await tools.call("smart_select", ["method": "person"]) }
         let found = try json(try await tools.call("detect", ["features": ["faces", "pose", "skin"]]))
         #expect((found["faces"] as? [Any])?.isEmpty == true && (found["poses"] as? [Any])?.isEmpty == true)
     }
