@@ -199,7 +199,7 @@ final class AgentTools {
         if let adjustment = layer.adjustment, let value = try? AgentCoding.json(adjustment) { json["adjustment"] = value }
         if let effects = layer.effects, let value = try? AgentCoding.json(effects) { json["effects"] = value }
         if let text = layer.liveText {
-            json["text"] = ["content": text.style.content, "font": text.style.fontName, "size": text.style.fontSize,
+            json["text"] = ["content": text.style.content, "font": text.style.fontName as String, "size": text.style.fontSize,
                             "color": AgentColor.hex(red: text.style.red, green: text.style.green, blue: text.style.blue),
                             "alignment": text.style.alignment.rawValue, "tracking": text.style.tracking, "leading": text.style.leading,
                             "box_width": Self.orNull(text.style.boxSize?.width), "box_height": Self.orNull(text.style.boxSize?.height)]
