@@ -36,10 +36,12 @@ struct AgentTool {
 final class AgentTools {
     let workspace: ProjectWorkspace
     private(set) var tools: [AgentTool] = []
+    /// Each layer image's opaque bounds, kept with the image so the key can't be reused by another.
+    var contentBoundsCache: [ObjectIdentifier: (image: CGImage, bounds: CGRect?)] = [:]
 
     init(workspace: ProjectWorkspace) {
         self.workspace = workspace
-        tools = documentTools + layerTools + pixelTools + selectionTools + canvasTools
+        tools = documentTools + perceptionTools + layerTools + pixelTools + selectionTools + canvasTools
     }
 
     func tool(named name: String) -> AgentTool? { tools.first { $0.name == name } }
@@ -193,7 +195,13 @@ final class AgentTools {
             "width": layer.transform.size.width, "height": layer.transform.size.height,
             "rotation": layer.transform.rotation, "flip_horizontal": layer.transform.flipX, "flip_vertical": layer.transform.flipY,
         ]
-        if let image = layer.asset?.image { json["pixel_width"] = image.width; json["pixel_height"] = image.height }
+        if let image = layer.asset?.image {
+            json["pixel_width"] = image.width
+            json["pixel_height"] = image.height
+            json["content_bounds"] = Self.orNull(contentPlacement(layer).map { placed -> JSONObject in
+                ["x": placed.bounds.minX, "y": placed.bounds.minY, "width": placed.bounds.width, "height": placed.bounds.height]
+            })
+        }
         if let source = layer.maskSourceID { json["clipped_to"] = source.uuidString }
         if let mask = layer.mask { json["mask"] = ["enabled": mask.isEnabled, "linked": mask.isLinked] }
         if let adjustment = layer.adjustment, let value = try? AgentCoding.json(adjustment) { json["adjustment"] = value }
@@ -236,23 +244,25 @@ final class AgentTools {
     // MARK: Pictures
 
     nonisolated static func encode(_ image: CGImage, as type: UTType, quality: Double = 0.85, background: PaletteColor? = nil) throws -> Data {
-        var source = image
-        if let background {
-            guard let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
-                                          space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
-            else { throw ExportError.render }
-            let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
-            context.setFillColor(CGColor(srgbRed: background.red, green: background.green, blue: background.blue, alpha: 1))
-            context.fill(bounds)
-            context.draw(image, in: bounds)
-            guard let flattened = context.makeImage() else { throw ExportError.render }
-            source = flattened
-        }
+        let source = try background.map { try flattened(image, over: $0) } ?? image
         let data = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(data, type.identifier as CFString, 1, nil) else { throw ExportError.encode }
         CGImageDestinationAddImage(destination, source, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { throw ExportError.encode }
         return data as Data
+    }
+
+    /// `image` over an opaque `background`.
+    nonisolated static func flattened(_ image: CGImage, over background: PaletteColor) throws -> CGImage {
+        guard let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+        else { throw ExportError.render }
+        let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        context.setFillColor(CGColor(srgbRed: background.red, green: background.green, blue: background.blue, alpha: 1))
+        context.fill(bounds)
+        context.draw(image, in: bounds)
+        guard let flattened = context.makeImage() else { throw ExportError.render }
+        return flattened
     }
 
     /// `image` shrunk to fit `longSide`, never enlarged.

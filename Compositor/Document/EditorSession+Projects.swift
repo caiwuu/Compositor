@@ -2,7 +2,11 @@ import Foundation
 
 extension EditorSession {
     func projectSnapshot() -> ProjectSnapshot? {
-        guard let document else { return nil }
+        document.map { projectSnapshot(of: $0) }
+    }
+
+    /// `document` as a project would save it, such as one from earlier in the history.
+    func projectSnapshot(of document: CanvasDocument) -> ProjectSnapshot {
         var images: [UUID: ImportedImage] = [:]
         var masks: [UUID: ImportedImage] = [:]
         let layers = document.layers.map { layer in

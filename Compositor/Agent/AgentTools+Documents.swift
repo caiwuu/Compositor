@@ -16,11 +16,15 @@ extension AgentTools {
                     AgentResult(value: documentJSON(try tab(arguments)))
                 },
             AgentTool(name: "get_canvas_image", title: "Look at Canvas",
-                description: "Returns a picture of the canvas as it would export (or of one layer’s own pixels, or its mask), scaled to fit max_size, so you can see the result of your edits. Use region to look closely at part of the canvas. JPEG is smaller and shows transparency over the background color; PNG keeps transparency.",
+                description: "Returns a picture of the canvas as it would export (or of one layer’s own pixels, or its mask), scaled to fit max_size, so you can see the result of your edits. Use region to look closely at part of the canvas. To place things exactly, turn on grid: lines labeled with their document coordinates. show_selection outlines the selection and outline_layer_ids outlines layers' content, labeled with their names. JPEG is smaller and shows transparency over the background color; PNG keeps transparency.",
                 schema: Schema.object([
                     "document_id": Schema.documentID,
                     "layer_id": Schema.string("Show only this layer’s own pixels, unplaced, instead of the whole canvas."),
                     "mask": Schema.boolean("With layer_id: show the layer’s mask (white shows the layer, black hides it)."),
+                    "grid": Schema.boolean("Draw grid lines labeled with their coordinates."),
+                    "grid_spacing": Schema.integer("Pixels between grid lines. Default: a round number giving about eight lines.", minimum: 1),
+                    "show_selection": Schema.boolean("Outline the selection (the canvas only)."),
+                    "outline_layer_ids": Schema.array("Outline these layers’ opaque content, each in its own color (the canvas only).", items: Schema.layerID),
                     "max_size": Schema.integer("Longest side of the picture, in pixels. Default 1024.", minimum: 64, maximum: 4096),
                     "format": Schema.string("Default jpeg.", choices: ["jpeg", "png"]),
                     "background": Schema.string("JPEG only: the color under transparent areas. Default #FFFFFF."),
@@ -123,7 +127,29 @@ extension AgentTools {
             }
         }
         let source = (width: image.width, height: image.height)
-        let picture = try Self.scaled(image, longSide: longSide)
+        var picture = try Self.scaled(image, longSide: longSide)
+        let onCanvas = described["layer_id"] == nil
+        let origin = CGPoint(x: (described["region"] as? JSONObject)?["x"] as? CGFloat ?? 0,
+                             y: (described["region"] as? JSONObject)?["y"] as? CGFloat ?? 0)
+        let showSelection = try arguments.bool("show_selection") == true
+        let outlineIDs = try arguments.uuids("outline_layer_ids") ?? []
+        guard onCanvas || (!showSelection && outlineIDs.isEmpty) else {
+            throw AgentError("show_selection and outline_layer_ids mark the canvas; leave out layer_id.")
+        }
+        let outlines = try outlineIDs.compactMap { id -> (name: String, corners: [CGPoint])? in
+            let layer = try self.layer(id, in: session)
+            return contentPlacement(layer).map { (layer.name, $0.corners) }
+        }
+        var grid: CGFloat?
+        if try arguments.bool("grid") == true || arguments.has("grid_spacing") {
+            grid = CGFloat(try arguments.int("grid_spacing") ?? Int(Self.gridSpacing(for: CGFloat(max(source.width, source.height)))))
+            described["grid_spacing"] = grid
+        }
+        let selection = showSelection ? session.selection.flatMap { $0.isEmpty ? nil : $0.path } : nil
+        if grid != nil || selection != nil || !outlines.isEmpty {
+            picture = try marked(picture, scale: CGFloat(picture.width) / CGFloat(max(1, source.width)), origin: origin,
+                                 grid: grid, selection: selection, outlines: outlines)
+        }
         let data = png ? try Self.encode(picture, as: .png) : try Self.encode(picture, as: .jpeg, background: background)
         described["image_width"] = picture.width
         described["image_height"] = picture.height
