@@ -445,7 +445,7 @@ nonisolated enum AgentPortrait {
             nostrils = rasterized([grown], width: w, height: h) ?? nostrils
         }
         // Hair falls from above and eyes sit above the cheeks, so skin is wanted some way straight up too.
-        let above = max(margin, Int(face.eyeWidth * 0.35))
+        let above = max(margin, Int(face.eyeWidth * 0.6))
         // Around the eyes, lids, lashes and crow's feet are all fine dark lines; spots there are for pointing at.
         var eyes: [CGPoint] = []
         for key in ["left_eye", "right_eye"] {
@@ -454,7 +454,7 @@ nonisolated enum AgentPortrait {
             let x = points.map(\.x).reduce(0, +) / count, y = points.map(\.y).reduce(0, +) / count
             eyes.append(CGPoint(x: x - CGFloat(x0), y: y - CGFloat(y0)))
         }
-        let across = face.eyeWidth * 0.85, down = face.eyeWidth * 0.55
+        let across = face.eyeWidth * 1.1, down = face.eyeWidth * 0.6
         func nearAnEye(_ x: Int, _ y: Int) -> Bool {
             eyes.contains { eye in
                 let dx: CGFloat = (CGFloat(x) - eye.x) / across, dy: CGFloat = (CGFloat(y) - eye.y) / down
