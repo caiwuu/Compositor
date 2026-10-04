@@ -447,12 +447,18 @@ nonisolated enum AgentPortrait {
         // Hair falls from above and eyes sit above the cheeks, so skin is wanted some way straight up too.
         let above = max(margin, Int(face.eyeWidth * 0.35))
         // Around the eyes, lids, lashes and crow's feet are all fine dark lines; spots there are for pointing at.
-        let eyes = ["left_eye", "right_eye"].compactMap { face.regions[$0] }.filter { !$0.isEmpty }.map { points in
-            CGPoint(x: points.map(\.x).reduce(0, +) / CGFloat(points.count) - CGFloat(x0), y: points.map(\.y).reduce(0, +) / CGFloat(points.count) - CGFloat(y0))
+        var eyes: [CGPoint] = []
+        for key in ["left_eye", "right_eye"] {
+            guard let points = face.regions[key], !points.isEmpty else { continue }
+            let count = CGFloat(points.count)
+            let x = points.map(\.x).reduce(0, +) / count, y = points.map(\.y).reduce(0, +) / count
+            eyes.append(CGPoint(x: x - CGFloat(x0), y: y - CGFloat(y0)))
         }
+        let across = face.eyeWidth * 0.85, down = face.eyeWidth * 0.55
         func nearAnEye(_ x: Int, _ y: Int) -> Bool {
             eyes.contains { eye in
-                pow((CGFloat(x) - eye.x) / (face.eyeWidth * 0.85), 2) + pow((CGFloat(y) - eye.y) / (face.eyeWidth * 0.55), 2) < 1
+                let dx: CGFloat = (CGFloat(x) - eye.x) / across, dy: CGFloat = (CGFloat(y) - eye.y) / down
+                return dx * dx + dy * dy < 1
             }
         }
         var candidate = [Bool](repeating: false, count: w * h)
