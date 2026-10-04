@@ -47,11 +47,29 @@ final class CompositorApplicationDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    /// Quits, saving or discarding as a normal quit does, and opens Compositor again once the quit goes ahead.
+    func restart() {
+        relaunches = true
+        NSApp.terminate(nil)
+    }
+    private var relaunches = false
+
+    func applicationWillTerminate(_ notification: Notification) {
+        guard relaunches else { return }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration)
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // What's still open (a dialog, a gradient waiting for Apply) is settled by confirmQuit, which beeps if
         // something, a save still running say, has to finish first.
-        guard !workspace.isManaging else { return .terminateCancel }
-        Task { sender.reply(toApplicationShouldTerminate: await workspace.confirmQuit()) }
+        guard !workspace.isManaging else { relaunches = false; return .terminateCancel }
+        Task { [weak self] in
+            let quits = await workspace.confirmQuit()
+            if !quits { self?.relaunches = false }
+            sender.reply(toApplicationShouldTerminate: quits)
+        }
         return .terminateLater
     }
 }

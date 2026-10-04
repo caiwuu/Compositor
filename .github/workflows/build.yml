@@ -42,6 +42,34 @@ jobs:
           DEVELOPMENT_TEAM=
           ENABLE_HARDENED_RUNTIME=NO
 
+      # Syncs the string catalog with what the compiler extracted, so text added without a Simplified Chinese
+      # translation, or no longer used, is listed here. The synced catalog is uploaded to copy back into the project.
+      - name: Check translations
+        run: |
+          cp Compositor/Localizable.xcstrings Localizable.xcstrings
+          find DerivedData/Build/Intermediates.noindex -path '*arm64*' -name '*.stringsdata' -print0 \
+            | xargs -0 xcrun xcstringstool sync Localizable.xcstrings --stringsdata
+          python3 - <<'EOF'
+          import json
+          strings = json.load(open('Localizable.xcstrings'))['strings']
+          untranslated = [key for key, entry in strings.items()
+                          if entry.get('shouldTranslate', True) and entry.get('extractionState') != 'stale'
+                          and 'zh-Hans' not in entry.get('localizations', {})]
+          stale = [key for key, entry in strings.items() if entry.get('extractionState') == 'stale']
+          for key in untranslated:
+              print(f'::warning title=Untranslated::{key}')
+          for key in stale:
+              print(f'::notice title=No longer used::{key}')
+          print(f'{len(strings)} strings, {len(untranslated)} without a zh-Hans translation, {len(stale)} no longer used.')
+          EOF
+
+      - name: Upload string catalog
+        uses: actions/upload-artifact@v7
+        with:
+          name: Localizable.xcstrings
+          path: Localizable.xcstrings
+          retention-days: 14
+
       - name: Package
         run: |
           APP=DerivedData/Build/Products/Release/Compositor.app

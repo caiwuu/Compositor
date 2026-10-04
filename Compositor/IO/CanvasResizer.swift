@@ -64,7 +64,7 @@ actor CanvasResizer {
             }
             let id = UUID()
             images[id] = asset
-            manifest.layers.insert(ProjectLayerRecord(id: id, name: "Canvas Extension", isVisible: true,
+            manifest.layers.insert(ProjectLayerRecord(id: id, name: String(localized: "Canvas Extension"), isVisible: true,
                 transform: LayerTransform(origin: .zero, size: CGSize(width: options.width, height: options.height)),
                 imageFile: "\(id.uuidString).png"), at: 0)
         }
