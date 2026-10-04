@@ -81,10 +81,11 @@ nonisolated enum AgentPixels {
     static func contentBounds(_ image: CGImage) throws -> CGRect? {
         let scale = min(1, 4096 / CGFloat(max(image.width, image.height)))
         let width = max(1, Int((CGFloat(image.width) * scale).rounded(.up))), height = max(1, Int((CGFloat(image.height) * scale).rounded(.up)))
-        var alpha = [UInt8](repeating: 0, count: width * height)
-        let drawn = alpha.withUnsafeMutableBytes { buffer -> Bool in
-            guard let context = CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
-                                          space: nil, bitmapInfo: CGImageAlphaInfo.alphaOnly.rawValue) else { return false }
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                          space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            else { return false }
             context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
             return true
         }
@@ -92,7 +93,7 @@ nonisolated enum AgentPixels {
         var minX = width, minY = height, maxX = -1, maxY = -1
         for y in 0..<height {
             let row = y * width
-            for x in 0..<width where alpha[row + x] > 0 {
+            for x in 0..<width where pixels[(row + x) * 4 + 3] > 0 {
                 minX = min(minX, x); maxX = max(maxX, x)
                 minY = min(minY, y); maxY = max(maxY, y)
             }
