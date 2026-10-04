@@ -378,9 +378,11 @@ nonisolated enum AgentPortrait {
             let grown = outline.union(outline.copy(strokingWithWidth: face.eyeWidth * 0.3, lineCap: .round, lineJoin: .round, miterLimit: 1))
             nostrils = rasterized([grown], width: w, height: h) ?? nostrils
         }
+        // Hair falls from above and eyes sit above the cheeks, so skin is wanted some way straight up too.
+        let above = max(margin, Int(face.eyeWidth * 0.35))
         var candidate = [Bool](repeating: false, count: w * h)
-        for y in 0..<h {
-            for x in 0..<w where inside[y * w + x] && nostrils[y * w + x] == 0 {
+        for y in above..<max(above, h) {
+            for x in 0..<w where inside[y * w + x] && inside[(y - above) * w + x] && nostrils[y * w + x] == 0 {
                 let side = min(h, y + margin + 1) - max(0, y - margin), across = min(w, x + margin + 1) - max(0, x - margin)
                 candidate[y * w + x] = total(counts, x, y, margin) == Double(side * across)
             }
@@ -407,17 +409,24 @@ nonisolated enum AgentPortrait {
         var seen = [Bool](repeating: false, count: w * h)
         var spots: [(x: Double, y: Double, radius: Double, contrast: Double)] = []
         for start in 0..<(w * h) where !seen[start] && candidate[start] && contrast[start] > threshold {
-            var stack = [start], area = 0.0, cx = 0.0, cy = 0.0, depth = 0.0
+            var stack = [start], area = 0.0, cx = 0.0, cy = 0.0, xx = 0.0, yy = 0.0, xy = 0.0, depth = 0.0
             seen[start] = true
             while let index = stack.popLast() {
                 let x = index % w, y = index / w
                 area += 1; cx += Double(x); cy += Double(y); depth = max(depth, contrast[index])
+                xx += Double(x * x); yy += Double(y * y); xy += Double(x * y)
                 for (nx, ny) in [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)] where nx >= 0 && ny >= 0 && nx < w && ny < h {
                     let next = ny * w + nx
                     if !seen[next], candidate[next], contrast[next] > threshold * 0.6 { seen[next] = true; stack.append(next) }
                 }
             }
             guard area >= 2, area <= maxArea else { continue }
+            // Round, not a strand of hair or a crease.
+            let mx = cx / area, my = cy / area
+            let vx = xx / area - mx * mx, vy = yy / area - my * my, cxy = xy / area - mx * my
+            let spread = ((vx - vy) * (vx - vy) + 4 * cxy * cxy).squareRoot()
+            let long = (vx + vy + spread) / 2, short = (vx + vy - spread) / 2
+            guard area < 6 || long <= max(short, 0.25) * 4 else { continue }
             spots.append((cx / area + Double(x0) + offset.x, cy / area + Double(y0) + offset.y, (area / .pi).squareRoot() + 1, depth))
         }
         spots.sort { $0.contrast * $0.radius > $1.contrast * $1.radius }
