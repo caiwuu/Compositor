@@ -166,7 +166,7 @@ extension AgentTools {
             return AgentSendable(value: try Self.warped(image, moves: moves, coverage: coverage, toDocument: toDocument,
                                                         documentWidth: width, documentHeight: height))
         }.value.value
-        guard let patch else { return outcome(session, changed: false, layerID: layer.id, extra: ["note": "Those moves are all off the layer."]) }
+        guard let patch else { return outcome(session, changed: false, layerID: layer.id, extra: ["note": "Nothing moved: the moves are off the layer or outside the selection."]) }
         let name = String(localized: "Liquify")
         let changed = try await change(session, name) {
             guard let current = session.activeLayer else { return }
@@ -181,7 +181,7 @@ extension AgentTools {
     }
 
     /// The part of `image` the moves change, warped: each output pixel takes its color from the point that moves onto
-    /// it, found by working the warp backward a few times. Nil when no move touches the image.
+    /// it, found by working the warp backward a few times. Nil when no pixel changes.
     private nonisolated static func warped(_ image: CGImage, moves: [WarpMove], coverage: [UInt8]?, toDocument: CGAffineTransform,
                                            documentWidth: Int, documentHeight: Int) throws -> (image: CGImage, rect: CGRect)? {
         let width = image.width, height = image.height
@@ -228,6 +228,7 @@ extension AgentTools {
             }
             for c in 0..<4 { output[index + c] = UInt8(min(255, max(0, value[c].rounded()))) }
         }
+        var moved = false
         for row in 0..<h {
             for column in 0..<w {
                 let target = CGPoint(x: CGFloat(column + x0) + 0.5, y: CGFloat(row + y0) + 0.5)
@@ -236,9 +237,15 @@ extension AgentTools {
                     let d = displacement(from)
                     from = CGPoint(x: target.x - d.x, y: target.y - d.y)
                 }
-                sample(from.x, from.y, into: (row * w + column) * 4)
+                let index = (row * w + column) * 4
+                sample(from.x, from.y, into: index)
+                if !moved {
+                    let offset = ((row + y0) * width + column + x0) * 4
+                    moved = (0..<4).contains { output[index + $0] != source[offset + $0] }
+                }
             }
         }
+        guard moved else { return nil }
         return (try Self.image(output, width: w, height: h), area)
     }
 
