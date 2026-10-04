@@ -123,5 +123,14 @@ struct AgentPortraitTests {
         #expect(lips.contains(CGPoint(x: 100, y: 122)) && !lips.contains(CGPoint(x: 100, y: 126)))
         let skin = try #require(AgentPortrait.path(of: "face_skin", in: face))
         #expect(skin.contains(CGPoint(x: 70, y: 110)) && !skin.contains(CGPoint(x: 85, y: 90)))
+
+        // A freckle the skin surrounds stays skin; hair reaching in from outside the face doesn't.
+        var mask = [UInt8](repeating: 255, count: 200 * 200)
+        for y in 112...118 { for x in 67...73 { mask[y * 200 + x] = 0 } }
+        for y in 60...64 { for x in 0...80 { mask[y * 200 + x] = 0 } }
+        let facial = try #require(AgentPortrait.faceSkin(face, skin: mask, width: 200, height: 200))
+        #expect(facial[115 * 200 + 70] == 255)
+        #expect(facial[62 * 200 + 74] == 0)
+        #expect(facial[90 * 200 + 85] == 0, "the eye stays out")
     }
 }
