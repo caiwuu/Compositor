@@ -78,6 +78,7 @@ struct AgentToolsTests {
         let merged = try AgentCoding.merged(StrokeEffect(), with: ["color": "#FF8000", "inside": true])
         #expect(merged.red == 1 && abs(merged.green - 128.0 / 255) < 0.001 && merged.blue == 0 && merged.inside && merged.size == 4)
         #expect(throws: AgentError.self) { _ = try AgentCoding.merged(StrokeEffect(), with: ["size": "big"]) }
+        #expect(throws: AgentError.self) { _ = try AgentCoding.merged(StrokeEffect(), with: ["sise": 3]) }
         #expect(AgentColor.parse("#abc") == PaletteColor(red: 170.0 / 255, green: 187.0 / 255, blue: 204.0 / 255))
         #expect(AgentCoding.text(["a": 0.6, "b": Optional<Int>.none as Any]).contains("\"a\" : 0.6"))
     }

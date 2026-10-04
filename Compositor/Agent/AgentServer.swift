@@ -267,7 +267,11 @@ final class AgentServer {
     Compositor is a layered image editor open on the person’s Mac; they watch the canvas update as you work.
     Start with list_documents and get_document: layers come with ids, kinds and placement. Coordinates are document \
     pixels from the top-left corner, y down. Each tool call that changes something is one Undo step (history undoes \
-    them). Look at your result with get_canvas_image after visual changes. Prefer non-destructive work: adjustment \
+    them). Measure before you change and check after: get_canvas_image shows the canvas (grid labels coordinates, \
+    outlines mark the selection and layers); analyze_image measures tone, clipping, color cast, sharpness and noise; \
+    sample_pixels reads colors and which layers make them; detect finds faces, text, subjects, salient regions and \
+    the horizon; compare shows and measures what your last steps changed. A picture alone is a poor judge of exact \
+    values and positions, so use the numbers. Prefer non-destructive work: adjustment \
     layers, masks (layer_mask, Remove Background), text and shape layers stay editable. Filters and draw change a \
     pixel layer inside the selection if there is one. describe_settings lists filter, adjustment and effect settings \
     and installed fonts. Files: Compositor is sandboxed and reaches ~/Pictures, ~/Downloads, folders the person \

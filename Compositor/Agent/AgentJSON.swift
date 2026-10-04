@@ -150,8 +150,25 @@ nonisolated enum AgentCoding {
         guard let patch, !patch.isEmpty else { return base }
         let combined = merge(try json(base), patch)
         let data = try JSONSerialization.data(withJSONObject: combined, options: [.fragmentsAllowed])
-        do { return try JSONDecoder().decode(T.self, from: data) }
+        let decoded: T
+        do { decoded = try JSONDecoder().decode(T.self, from: data) }
         catch { throw AgentError("Invalid \(name): \(describe(error)). Call describe_settings to see the expected shape.") }
+        // A key the settings don't have would otherwise be dropped without a word, and the edit look done.
+        let unknown = unknownKeys(patch, in: try json(decoded))
+        guard unknown.isEmpty else {
+            throw AgentError("\(name.prefix(1).uppercased() + name.dropFirst()) have no \(unknown.sorted().map { "“\($0)”" }.joined(separator: ", ")). Call describe_settings to see the keys they take.")
+        }
+        return decoded
+    }
+
+    /// The keys in `patch` (dotted paths into nested objects) that `result` doesn't have.
+    static func unknownKeys(_ patch: Any, in result: Any, path: String = "") -> [String] {
+        guard let patch = patch as? JSONObject, let result = result as? JSONObject else { return [] }
+        return patch.flatMap { key, value -> [String] in
+            if value is NSNull || (key == "color" && result["red"] != nil) { return [] }
+            guard let found = result[key] else { return [path + key] }
+            return unknownKeys(value, in: found, path: path + key + ".")
+        }
     }
 
     static func merge(_ base: Any, _ patch: Any) -> Any {

@@ -38,6 +38,12 @@ final class DocumentHistory {
     var isModified: Bool { revision != savedRevision }
     var undoCount: Int { past.count }
     func markSaved() { savedRevision = revision }
+    /// The document as it was `steps` undos ago, with the names of the steps in between, newest first.
+    /// Nil when there aren't that many steps to go back.
+    func earlier(_ steps: Int) -> (document: CanvasDocument?, names: [String])? {
+        guard steps >= 1, steps <= past.count else { return nil }
+        return (past[past.count - steps].before.document, past.suffix(steps).reversed().map(\.name))
+    }
     /// The document as it stands, for a save that captures it now and finishes later.
     var currentRevision: UUID { revision }
     /// A save of `saved` finished. Edits made while it was writing leave the document modified; undoing back to it doesn't.
