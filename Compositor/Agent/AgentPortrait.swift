@@ -286,6 +286,7 @@ nonisolated enum AgentPortrait {
         }
         func round(_ p: CGPoint) -> [Double] { [Double((p.x + offset.x).rounded()), Double((p.y + offset.y).rounded())] }
         var result: JSONObject = [:]
+        let middle = pose["neck"]?.point ?? pose["left_shoulder"].flatMap { l in pose["right_shoulder"].map { CGPoint(x: (l.point.x + $0.point.x) / 2, y: (l.point.y + $0.point.y) / 2) } }
         for side in ["left", "right"] {
             var segments: [JSONObject] = []
             for (name, from, to) in [("upper_arm", "\(side)_shoulder", "\(side)_elbow"), ("forearm", "\(side)_elbow", "\(side)_wrist")] {
@@ -295,7 +296,8 @@ nonisolated enum AgentPortrait {
                 let along = CGPoint(x: (b.x - a.x) / length, y: (b.y - a.y) / length), across = CGPoint(x: -along.y, y: along.x)
                 let reach = length * 0.45
                 var samples: [JSONObject] = []
-                for t in [0.2, 0.35, 0.5, 0.65, 0.8] {
+                var outer: [CGPoint] = [], inner: [CGPoint] = []
+                for t in stride(from: 0.1, through: 0.9001, by: 0.1) {
                     let center = CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
                     bare = false
                     guard inside(center) else { continue }
@@ -310,14 +312,30 @@ nonisolated enum AgentPortrait {
                         return (CGPoint(x: center.x + across.x * sign * reach, y: center.y + across.y * sign * reach), true)
                     }
                     let one = edge(1), two = edge(-1)
-                    var sample: JSONObject = ["at": t, "center": round(center), "edge_a": round(one.point), "edge_b": round(two.point),
+                    if let middle {
+                        let oneIsOuter = hypot(one.point.x - middle.x, one.point.y - middle.y) > hypot(two.point.x - middle.x, two.point.y - middle.y)
+                        let (o, i) = oneIsOuter ? (one, two) : (two, one)
+                        if !o.open { outer.append(o.point) }
+                        if !i.open { inner.append(i.point) }
+                    }
+                    var sample: JSONObject = ["at": (t * 10).rounded() / 10, "center": round(center), "edge_a": round(one.point), "edge_b": round(two.point),
                                               "width": Double(hypot(one.point.x - two.point.x, one.point.y - two.point.y).rounded())]
                     if one.open { sample["edge_a_touches_body"] = true }
                     if two.open { sample["edge_b_touches_body"] = true }
                     if bare { sample["bare"] = true }
                     samples.append(sample)
                 }
-                segments.append(["segment": name, "from": round(a), "to": round(b), "across": [Double(across.x), Double(across.y)], "samples": samples])
+                var segment: JSONObject = ["segment": name, "from": round(a), "to": round(b), "across": [Double(across.x), Double(across.y)], "samples": samples]
+                // Edges found a pixel apart wobble; evened out, they make a path warp can move.
+                func smoothed(_ points: [CGPoint]) -> [[Double]] {
+                    points.indices.map { i in
+                        let near = points[max(0, i - 1)...min(points.count - 1, i + 1)]
+                        return round(CGPoint(x: near.map(\.x).reduce(0, +) / CGFloat(near.count), y: near.map(\.y).reduce(0, +) / CGFloat(near.count)))
+                    }
+                }
+                if outer.count >= 2 { segment["outer_edge"] = smoothed(outer) }
+                if inner.count >= 2 { segment["inner_edge"] = smoothed(inner) }
+                segments.append(segment)
             }
             if !segments.isEmpty { result["\(side)_arm"] = segments }
         }

@@ -109,6 +109,10 @@ nonisolated struct AgentArguments: @unchecked Sendable {
         }
         throw AgentError("“\(key)” must list points as [x, y].")
     }
+    static func points(_ value: Any, key: String) throws -> [CGPoint] {
+        guard let list = value as? [Any] else { throw AgentError("“\(key)” must be a list of [x, y] points.") }
+        return try list.map { try point($0, key: key) }
+    }
     static func isBool(_ number: NSNumber) -> Bool { CFGetTypeID(number) == CFBooleanGetTypeID() }
 }
 

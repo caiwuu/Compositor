@@ -4,15 +4,18 @@ extension AgentTools {
     var portraitTools: [AgentTool] {
         [
             AgentTool(name: "warp", title: "Liquify Warp",
-                description: "Moves parts of a pixel layer smoothly, as Liquify's Forward Warp does but exactly: each move carries the point at from to to, and drags what's within radius of it along, less and less toward the edge. For slimming a face or an arm, take points on its edge (from detect's face contours or arm edges) a few pixels inward, with a radius about the size of the part being reshaped; for several points along an edge, give them all in one call. A move can't be longer than half its radius, or the picture would fold; for more, call again. With a selection, only selected pixels move (feathered edges fade). To slim, the background beside the edge has to move in, so don't select just the person; select a generous area around the part instead, to keep other things (a face, a straight edge) still, and check with compare outside_selection that nothing else moved. One undo step.",
+                description: "Moves parts of a pixel layer smoothly, as Liquify's Forward Warp does but exactly: each move carries the point at from to to, and drags what's within radius of it along, less and less toward the edge. To slim a face or an arm, move its edge as a path instead: path follows the edge (detect's face contour or an arm's outer edge points) and shift moves it, a few pixels inward; everything within radius of the line moves with it, so the edge stays a smooth curve. Separate point moves along an edge make it wavy. shifts gives each path point its own move, as for a jaw, tapering to [0, 0] at the ends. A move can't be longer than half its radius, or the picture would fold; for more, call again. With a selection, only selected pixels move (feathered edges fade). To slim, the background beside the edge has to move in, so don't select just the person; select a generous area around the part instead, to keep other things (a face, a straight edge) still, and check with compare outside_selection that nothing else moved. One undo step.",
                 schema: Schema.object([
                     "document_id": Schema.documentID,
                     "layer_id": Schema.string("The pixel layer to warp. Default: the selected layer."),
-                    "moves": Schema.array("The moves, in document pixels.", items: Schema.object([
+                    "moves": Schema.array("The moves, in document pixels: from and to, or path with shift or shifts.", items: Schema.object([
                         "from": Schema.array("Where the point is: [x, y].", items: Schema.number("A coordinate.")),
                         "to": Schema.array("Where it goes: [x, y].", items: Schema.number("A coordinate.")),
+                        "path": Schema.points,
+                        "shift": Schema.array("How the whole path moves: [dx, dy].", items: Schema.number("A distance.")),
+                        "shifts": Schema.array("How each path point moves, one [dx, dy] each.", items: Schema.array("[dx, dy].", items: Schema.number("A distance."))),
                         "radius": Schema.number("How far around it the move reaches, in pixels. Default: radius below.", minimum: 1),
-                    ], required: ["from", "to"])),
+                    ])),
                     "radius": Schema.number("The radius for moves that don't give one.", minimum: 1),
                 ], required: ["moves"]), destructive: true) { [unowned self] arguments in
                     try await warp(arguments)
@@ -122,10 +125,33 @@ extension AgentTools {
 
     // MARK: Warping
 
+    /// A point dragged by `deltas[0]`, or a line whose points move by their deltas, with what lies between them moving
+    /// by a mix of the two nearest, so a whole edge shifts evenly.
     nonisolated private struct WarpMove: Sendable {
-        let from: CGPoint
-        let delta: CGPoint
+        let points: [CGPoint]
+        let deltas: [CGPoint]
         let radius: CGFloat
+
+        /// How far `p` is from the line, squared, and how the line moves at the point nearest it.
+        func nearest(_ p: CGPoint) -> (distance: CGFloat, delta: CGPoint) {
+            guard points.count > 1 else {
+                return ((p.x - points[0].x) * (p.x - points[0].x) + (p.y - points[0].y) * (p.y - points[0].y), deltas[0])
+            }
+            var best = (distance: CGFloat.infinity, delta: CGPoint.zero)
+            for i in 0..<(points.count - 1) {
+                let a = points[i], b = points[i + 1]
+                let ab = CGPoint(x: b.x - a.x, y: b.y - a.y)
+                let length = ab.x * ab.x + ab.y * ab.y
+                let t = length > 0 ? min(1, max(0, ((p.x - a.x) * ab.x + (p.y - a.y) * ab.y) / length)) : 0
+                let q = CGPoint(x: a.x + ab.x * t, y: a.y + ab.y * t)
+                let distance = (p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y)
+                if distance < best.distance {
+                    best = (distance, CGPoint(x: deltas[i].x + (deltas[i + 1].x - deltas[i].x) * t,
+                                              y: deltas[i].y + (deltas[i + 1].y - deltas[i].y) * t))
+                }
+            }
+            return best
+        }
     }
 
     private func warp(_ arguments: AgentArguments) async throws -> AgentResult {
@@ -141,19 +167,37 @@ extension AgentTools {
         let toPixel = toDocument.inverted()
         let scale = abs(toPixel.a * toPixel.d - toPixel.b * toPixel.c).squareRoot()
         let moves = try list.map { value -> WarpMove in
-            guard let object = value as? JSONObject, let from = object["from"], let to = object["to"] else {
-                throw AgentError("Each move needs from and to.")
-            }
-            let start = try AgentArguments.point(from, key: "from"), end = try AgentArguments.point(to, key: "to")
+            guard let object = value as? JSONObject else { throw AgentError("Each move is an object.") }
             guard let radius = (object["radius"] as? NSNumber)?.doubleValue ?? defaultRadius, radius >= 1 else {
                 throw AgentError("Give each move a radius, or radius for all of them.")
             }
-            let length = hypot(end.x - start.x, end.y - start.y)
+            var points: [CGPoint] = [], deltas: [CGPoint] = []
+            if let path = object["path"] {
+                points = try AgentArguments.points(path, key: "path")
+                guard points.count >= 2, points.count <= 500 else { throw AgentError("A path needs 2 to 500 points.") }
+                if let shifts = object["shifts"] {
+                    deltas = try AgentArguments.points(shifts, key: "shifts")
+                    guard deltas.count == points.count else { throw AgentError("shifts needs one [dx, dy] for each point of path.") }
+                } else if let shift = object["shift"] {
+                    deltas = Array(repeating: try AgentArguments.point(shift, key: "shift"), count: points.count)
+                } else {
+                    throw AgentError("A path move needs shift or shifts.")
+                }
+            } else if let from = object["from"], let to = object["to"] {
+                let start = try AgentArguments.point(from, key: "from"), end = try AgentArguments.point(to, key: "to")
+                points = [start]
+                deltas = [CGPoint(x: end.x - start.x, y: end.y - start.y)]
+            } else {
+                throw AgentError("Each move needs from and to, or path and shift.")
+            }
+            let length = deltas.map { hypot($0.x, $0.y) }.max() ?? 0
             guard length <= radius / 2 else {
                 throw AgentError("A move of \(Int(length.rounded())) pixels needs a radius of at least \(Int((length * 2).rounded(.up))); or move it in several calls.")
             }
-            let a = start.applying(toPixel), b = end.applying(toPixel)
-            return WarpMove(from: a, delta: CGPoint(x: b.x - a.x, y: b.y - a.y), radius: CGFloat(radius) * scale)
+            let pixels = points.map { $0.applying(toPixel) }
+            let moved = zip(points, deltas).map { CGPoint(x: $0.x + $1.x, y: $0.y + $1.y).applying(toPixel) }
+            return WarpMove(points: pixels, deltas: zip(pixels, moved).map { CGPoint(x: $1.x - $0.x, y: $1.y - $0.y) },
+                            radius: CGFloat(radius) * scale)
         }
         var coverage: [UInt8]?
         if let selection = session.selection, !selection.isEmpty {
@@ -187,8 +231,10 @@ extension AgentTools {
         let width = image.width, height = image.height
         var area = CGRect.null
         for move in moves {
-            let reach = move.radius + hypot(move.delta.x, move.delta.y) + 2
-            area = area.union(CGRect(x: move.from.x - reach, y: move.from.y - reach, width: reach * 2, height: reach * 2))
+            let reach = move.radius + (move.deltas.map { hypot($0.x, $0.y) }.max() ?? 0) + 2
+            for point in move.points {
+                area = area.union(CGRect(x: point.x - reach, y: point.y - reach, width: reach * 2, height: reach * 2))
+            }
         }
         area = area.integral.intersection(CGRect(x: 0, y: 0, width: width, height: height))
         guard !area.isNull, area.width >= 1, area.height >= 1 else { return nil }
@@ -205,12 +251,12 @@ extension AgentTools {
         func displacement(_ p: CGPoint) -> CGPoint {
             var dx: CGFloat = 0, dy: CGFloat = 0
             for move in moves {
-                let ex = p.x - move.from.x, ey = p.y - move.from.y
-                let t = (ex * ex + ey * ey) / (move.radius * move.radius)
+                let nearest = move.nearest(p)
+                let t = nearest.distance / (move.radius * move.radius)
                 guard t < 1 else { continue }
                 let falloff = (1 - t) * (1 - t)
-                dx += move.delta.x * falloff
-                dy += move.delta.y * falloff
+                dx += nearest.delta.x * falloff
+                dy += nearest.delta.y * falloff
             }
             guard dx != 0 || dy != 0 else { return .zero }
             let w = weight(p)

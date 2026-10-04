@@ -41,6 +41,17 @@ struct AgentPortraitTests {
         await #expect(throws: AgentError.self) { try await tools.call("warp", ["moves": [["from": [50, 50], "to": [0, 50], "radius": 30]]]) }
     }
 
+    @Test func aPathMoveKeepsAStraightEdgeStraight() async throws {
+        let workspace = ProjectWorkspace()
+        let tools = AgentTools(workspace: workspace)
+        try await redBlock(tools)
+        _ = try await tools.call("warp", ["moves": [["path": [[60, 20], [60, 50], [60, 80]], "shift": [-6, 0]]], "radius": 30])
+        let inside = try await colors(tools, [[52, 35], [52, 45], [52, 55], [52, 65]])
+        let moved = try await colors(tools, [[56, 35], [56, 45], [56, 55], [56, 65]])
+        #expect(inside.allSatisfy { $0 == "#FF0000" } && moved.allSatisfy { $0 == "#FFFFFF" })
+        await #expect(throws: AgentError.self) { try await tools.call("warp", ["moves": [["path": [[60, 20], [60, 80]], "shifts": [[-6, 0]]]], "radius": 30]) }
+    }
+
     @Test func brushStrokesPaintAndHeal() async throws {
         let workspace = ProjectWorkspace()
         let tools = AgentTools(workspace: workspace)
