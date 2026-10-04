@@ -446,9 +446,18 @@ nonisolated enum AgentPortrait {
         }
         // Hair falls from above and eyes sit above the cheeks, so skin is wanted some way straight up too.
         let above = max(margin, Int(face.eyeWidth * 0.35))
+        // Around the eyes, lids, lashes and crow's feet are all fine dark lines; spots there are for pointing at.
+        let eyes = ["left_eye", "right_eye"].compactMap { face.regions[$0] }.filter { !$0.isEmpty }.map { points in
+            CGPoint(x: points.map(\.x).reduce(0, +) / CGFloat(points.count) - CGFloat(x0), y: points.map(\.y).reduce(0, +) / CGFloat(points.count) - CGFloat(y0))
+        }
+        func nearAnEye(_ x: Int, _ y: Int) -> Bool {
+            eyes.contains { eye in
+                pow((CGFloat(x) - eye.x) / (face.eyeWidth * 0.85), 2) + pow((CGFloat(y) - eye.y) / (face.eyeWidth * 0.55), 2) < 1
+            }
+        }
         var candidate = [Bool](repeating: false, count: w * h)
         for y in above..<max(above, h) {
-            for x in 0..<w where inside[y * w + x] && inside[(y - above) * w + x] && nostrils[y * w + x] == 0 {
+            for x in 0..<w where inside[y * w + x] && inside[(y - above) * w + x] && nostrils[y * w + x] == 0 && !nearAnEye(x, y) {
                 let side = min(h, y + margin + 1) - max(0, y - margin), across = min(w, x + margin + 1) - max(0, x - margin)
                 candidate[y * w + x] = total(counts, x, y, margin) == Double(side * across)
             }
