@@ -392,8 +392,10 @@ nonisolated enum AgentPortrait {
         var deviations = 0.0, deviationCount = 0.0
         for y in 0..<h {
             for x in 0..<w where candidate[y * w + x] {
+                // Mostly skin around, unlike skin showing between hairs or beside an eye.
                 let count = total(counts, x, y, radius)
-                guard count > 0 else { continue }
+                let window = Double((min(h, y + radius + 1) - max(0, y - radius)) * (min(w, x + radius + 1) - max(0, x - radius)))
+                guard count >= window * 0.75 else { continue }
                 let value = (total(lumas, x, y, radius) / count - luma[y * w + x]) + 1.5 * (redness[y * w + x] - total(reds, x, y, radius) / count)
                 contrast[y * w + x] = value
                 deviations += value * value; deviationCount += 1
