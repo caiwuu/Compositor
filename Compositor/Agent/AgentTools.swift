@@ -41,7 +41,7 @@ final class AgentTools {
 
     init(workspace: ProjectWorkspace) {
         self.workspace = workspace
-        tools = documentTools + perceptionTools + layerTools + pixelTools + selectionTools + canvasTools
+        tools = documentTools + perceptionTools + layerTools + pixelTools + portraitTools + selectionTools + canvasTools
     }
 
     func tool(named name: String) -> AgentTool? { tools.first { $0.name == name } }

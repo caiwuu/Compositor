@@ -104,7 +104,7 @@ extension AgentTools {
     }
 
     /// Picks the layer and, with target mask, its mask.
-    private func pixelTarget(_ arguments: AgentArguments, in session: EditorSession) throws -> (layer: ImageLayer, mask: Bool) {
+    func pixelTarget(_ arguments: AgentArguments, in session: EditorSession) throws -> (layer: ImageLayer, mask: Bool) {
         let layer = try target(arguments, in: session)
         let mask = try arguments.string("target")?.lowercased() == "mask"
         if mask {

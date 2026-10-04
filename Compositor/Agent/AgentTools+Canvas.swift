@@ -17,10 +17,17 @@ extension AgentTools {
                     try await select(arguments)
                 },
             AgentTool(name: "smart_select", title: "Smart Select",
-                description: "Selects by what’s in the picture: subject finds the main subject (people, animals, objects) with machine learning; object selects the thing at x, y; wand selects pixels similar in color to the one at x, y. object and wand read the visible canvas unless sample_all_layers is false, in which case they read layer_id (or the selected layer).",
+                description: "Selects by what’s in the picture: subject finds the main subject (people, animals, objects) with machine learning; object selects the thing at x, y; wand selects pixels similar in color to the one at x, y. object and wand read the visible canvas unless sample_all_layers is false, in which case they read layer_id (or the selected layer). For portraits: person selects people (hair and clothes too); skin selects skin that matches the faces' own; face (jaw to forehead), face_skin (the face without eyes, brows and lips, skin only), lips (without the mouth's inside), mouth (between the lips: teeth), eyes, left_eye, right_eye, eyebrows and nose follow Vision's face landmarks, on the face_index'th largest face. color_range selects every pixel near the given colors or the colors at points, as Select > Color Range does. grow (negative shrinks) and feather then adjust the result; it's all one undo step.",
                 schema: Schema.object([
                     "document_id": Schema.documentID,
-                    "method": Schema.string("How to select.", choices: ["subject", "object", "wand"]),
+                    "method": Schema.string("How to select.", choices: ["subject", "object", "wand", "person", "skin", "color_range"] + AgentPortrait.faceParts),
+                    "face_index": Schema.integer("For face parts: which face, 0 the largest. Default 0.", minimum: 0),
+                    "colors": Schema.array("For color_range: colors to select, as #RRGGBB.", items: Schema.string("A color.")),
+                    "points": Schema.points,
+                    "fuzziness": Schema.integer("For color_range: how far from the colors to reach, 0–200. Default 40.", minimum: 0, maximum: 200),
+                    "invert": Schema.boolean("For color_range: select everything but those colors."),
+                    "grow": Schema.integer("Afterwards, expand the selection by this many pixels (negative contracts).", minimum: -500, maximum: 500),
+                    "feather": Schema.integer("Afterwards, soften its edge by this many pixels.", minimum: 0, maximum: 500),
                     "mode": Schema.selectionMode,
                     "x": Schema.number("For object and wand: the point, in document pixels."), "y": Schema.number("The point’s y."),
                     "tolerance": Schema.integer("Wand: how different (0–255) a color may be and still be selected. Default 32.", minimum: 0, maximum: 255),
@@ -196,27 +203,49 @@ extension AgentTools {
             }
             return CGPoint(x: x, y: y)
         }
-        let changed: Bool
+        let name: String
         switch method {
-        case "subject":
-            guard session.canSelectSubject else { throw AgentError("Compositor can’t select right now.") }
-            changed = try await change(session, String(localized: "Select Subject")) { await session.selectSubject(mode: mode) }
-        case "object":
-            let at = try point()
-            let saved = session.objectSelectionSettings
-            defer { session.objectSelectionSettings = saved }
-            session.objectSelectionSettings.sampleAllLayers = sampleAll
-            changed = try await change(session, String(localized: "Select Object")) { await session.selectObject(at: at, mode: mode) }
-        case "wand":
-            let at = try point()
-            let saved = session.wandSettings
-            defer { session.wandSettings = saved }
-            session.wandSettings.sampleAllLayers = sampleAll
-            if let tolerance = try arguments.int("tolerance") { session.wandSettings.tolerance = min(255, max(0, tolerance)) }
-            if let contiguous = try arguments.bool("contiguous") { session.wandSettings.contiguous = contiguous }
-            changed = try await change(session, String(localized: "Magic Wand")) { await session.magicWand(at: at, mode: mode) }
-        default:
-            throw AgentError("method must be subject, object or wand.")
+        case "subject": name = String(localized: "Select Subject")
+        case "object": name = String(localized: "Select Object")
+        case "wand": name = String(localized: "Magic Wand")
+        case "color_range": name = String(localized: "Color Range")
+        default: name = String(localized: "Select")
+        }
+        let changed = try await change(session, name) {
+            switch method {
+            case "subject":
+                guard session.canSelectSubject else { throw AgentError("Compositor can’t select right now.") }
+                await session.selectSubject(mode: mode)
+            case "object":
+                let at = try point()
+                let saved = session.objectSelectionSettings
+                defer { session.objectSelectionSettings = saved }
+                session.objectSelectionSettings.sampleAllLayers = sampleAll
+                await session.selectObject(at: at, mode: mode)
+            case "wand":
+                let at = try point()
+                let saved = session.wandSettings
+                defer { session.wandSettings = saved }
+                session.wandSettings.sampleAllLayers = sampleAll
+                if let tolerance = try arguments.int("tolerance") { session.wandSettings.tolerance = min(255, max(0, tolerance)) }
+                if let contiguous = try arguments.bool("contiguous") { session.wandSettings.contiguous = contiguous }
+                await session.magicWand(at: at, mode: mode)
+            case "color_range":
+                try await selectColorRange(arguments, in: session, mode: mode)
+            case "person", "skin":
+                try await selectPortrait(method, arguments, in: session, mode: mode)
+            default:
+                guard AgentPortrait.faceParts.contains(method) else {
+                    throw AgentError("method must be one of: subject, object, wand, person, skin, color_range, \(AgentPortrait.faceParts.joined(separator: ", ")).")
+                }
+                try await selectPortrait(method, arguments, in: session, mode: mode)
+            }
+            if let grow = try arguments.int("grow"), grow != 0, session.canModifySelection {
+                if grow > 0 { session.expandSelection(by: min(500, grow)) } else { session.contractSelection(by: min(500, -grow)) }
+            }
+            if let feather = try arguments.int("feather"), feather > 0, session.canModifySelection {
+                session.featherSelection(by: min(500, feather))
+            }
         }
         return outcome(session, changed: changed,
                        extra: ["selection": selectionJSON(session)].merging(changed ? [:] : ["note": "Nothing was found to select there."]) { a, _ in a })

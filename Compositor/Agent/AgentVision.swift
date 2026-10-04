@@ -5,7 +5,7 @@ import Vision
 
 /// What Vision finds in a picture, on this Mac: positions in the picture's pixels from its top-left corner.
 nonisolated enum AgentVision {
-    static let features = ["faces", "text", "saliency", "horizon", "subjects", "people", "animals", "rectangles", "labels"]
+    static let features = ["faces", "text", "saliency", "horizon", "subjects", "people", "animals", "rectangles", "labels", "pose", "arms", "skin"]
     static let defaultFeatures: Set<String> = ["faces", "text", "saliency", "horizon", "subjects", "labels"]
 
     static func detect(_ image: CGImage, features: Set<String>, offset: CGPoint) throws -> JSONObject {
@@ -19,10 +19,8 @@ nonisolated enum AgentVision {
         func point(_ normalized: CGPoint) -> JSONObject {
             ["x": (normalized.x * size.width + offset.x).rounded(), "y": ((1 - normalized.y) * size.height + offset.y).rounded()]
         }
-        func degrees(_ radians: NSNumber?) -> Any { AgentTools.orNull(radians.map { $0.doubleValue * 180 / .pi }) }
-
         var requests: [VNRequest] = []
-        let faces = VNDetectFaceLandmarksRequest(), quality = VNDetectFaceCaptureQualityRequest()
+        let quality = VNDetectFaceCaptureQualityRequest()
         let text = VNRecognizeTextRequest()
         text.recognitionLevel = .accurate
         text.usesLanguageCorrection = true
@@ -38,7 +36,7 @@ nonisolated enum AgentVision {
         rectangles.maximumObservations = 8
         rectangles.minimumConfidence = 0.6
         let labels = VNClassifyImageRequest()
-        if features.contains("faces") { requests += [faces, quality] }
+        if features.contains("faces") { requests.append(quality) }
         if features.contains("text") { requests.append(text) }
         if features.contains("saliency") { requests.append(saliency) }
         if features.contains("horizon") { requests.append(horizon) }
@@ -55,32 +53,47 @@ nonisolated enum AgentVision {
             do { try handler.perform([request]) } catch { failures[name(of: request)] = error.localizedDescription }
         }
 
+        let needsFaces = !features.isDisjoint(with: ["faces", "skin"])
+        let faces = needsFaces ? try AgentPortrait.faces(in: image) : []
         if features.contains("faces") {
             let qualities = quality.results ?? []
-            result["faces"] = (faces.results ?? []).map { face -> JSONObject in
-                var json: JSONObject = ["bounds": box(face.boundingBox), "confidence": face.confidence,
-                                        "roll_degrees": degrees(face.roll), "yaw_degrees": degrees(face.yaw)]
-                if let match = qualities.first(where: { $0.boundingBox.intersects(face.boundingBox) }), let value = match.faceCaptureQuality {
+            result["faces"] = faces.map { face -> JSONObject in
+                var json = AgentPortrait.describe(face, offset: offset)
+                let normalized = VNNormalizedRectForImageRect(CGRect(x: face.bounds.minX, y: size.height - face.bounds.maxY,
+                                                                     width: face.bounds.width, height: face.bounds.height), image.width, image.height)
+                if let match = qualities.first(where: { $0.boundingBox.intersects(normalized) }), let value = match.faceCaptureQuality {
                     json["capture_quality"] = value
-                }
-                if let landmarks = face.landmarks {
-                    var marks: JSONObject = [:]
-                    let parts: [(String, VNFaceLandmarkRegion2D?)] = [
-                        ("left_eye", landmarks.leftEye), ("right_eye", landmarks.rightEye), ("nose", landmarks.nose),
-                        ("mouth", landmarks.outerLips), ("left_eyebrow", landmarks.leftEyebrow), ("right_eyebrow", landmarks.rightEyebrow),
-                    ]
-                    for (key, region) in parts {
-                        guard let region, region.pointCount > 0 else { continue }
-                        let points = region.normalizedPoints
-                        let middle = CGPoint(x: points.map(\.x).reduce(0, +) / CGFloat(points.count),
-                                             y: points.map(\.y).reduce(0, +) / CGFloat(points.count))
-                        let face = face.boundingBox
-                        marks[key] = point(CGPoint(x: face.minX + middle.x * face.width, y: face.minY + middle.y * face.height))
-                    }
-                    json["landmarks"] = marks
                 }
                 return json
             }
+        }
+        let needsPerson = !features.isDisjoint(with: ["arms", "skin"])
+        let person = needsPerson ? try AgentPortrait.personMask(image) : nil
+        if !features.isDisjoint(with: ["pose", "arms"]) {
+            let poses = try AgentPortrait.poses(in: image)
+            if features.contains("pose") {
+                result["poses"] = poses.map { joints in
+                    joints.mapValues { ["x": Double(($0.point.x + offset.x).rounded()), "y": Double(($0.point.y + offset.y).rounded()),
+                                        "confidence": $0.confidence] as JSONObject }
+                }
+            }
+            if features.contains("arms"), let person {
+                result["arms"] = poses.map { AgentPortrait.arms($0, person: person, width: image.width, height: image.height, offset: offset) }
+            }
+        }
+        if features.contains("skin") {
+            let bitmap = try AgentBitmap(image)
+            let skin = AgentPortrait.skinMask(bitmap, faces: faces, person: person)
+            result["skin"] = faces.enumerated().map { index, face -> JSONObject in
+                var report: JSONObject = ["face_index": index]
+                if let outline = AgentPortrait.path(of: "face_skin", in: face),
+                   let area = AgentPortrait.rasterized([outline], width: image.width, height: image.height) {
+                    let facial = zip(area, skin).map { $0 != 0 && $1 != 0 ? UInt8(255) : 0 }
+                    report.merge(AgentPortrait.skinReport(bitmap, face: face, skin: facial, offset: offset)) { _, new in new }
+                }
+                return report
+            }
+            result["skin_fraction"] = Double(skin.filter { $0 != 0 }.count) / Double(max(1, skin.count))
         }
         if features.contains("text") {
             result["text"] = (text.results ?? []).prefix(200).compactMap { line -> JSONObject? in
@@ -132,7 +145,7 @@ nonisolated enum AgentVision {
 
     private static func name(of request: VNRequest) -> String {
         switch request {
-        case is VNDetectFaceLandmarksRequest, is VNDetectFaceCaptureQualityRequest: "faces"
+        case is VNDetectFaceCaptureQualityRequest: "faces"
         case is VNRecognizeTextRequest: "text"
         case is VNGenerateAttentionBasedSaliencyImageRequest: "saliency"
         case is VNDetectHorizonRequest: "horizon"

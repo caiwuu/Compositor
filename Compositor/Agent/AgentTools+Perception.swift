@@ -25,7 +25,7 @@ extension AgentTools {
                     try await samplePixels(arguments)
                 },
             AgentTool(name: "detect", title: "Detect Content",
-                description: "Finds what's in the picture with the Mac's own Vision framework, as positions in document pixels: faces (with eyes, nose, mouth and eyebrows, head roll and yaw, capture quality), text (read in English and Chinese), salient regions (where the eye goes), the horizon's tilt and the rotation that levels it, separate foreground subjects, people, animals, rectangles such as documents or screens (corners, for perspective), and labels classifying the scene. Use it to find what to select, crop to, straighten or repair. Looks at the canvas as it exports, or a layer's own pixels, optionally a region.",
+                description: "Finds what's in the picture with the Mac's own Vision framework, as positions in document pixels: faces (bounds, landmark centers, and contours: face_contour along the jaw, eyes, eyebrows, nose, nose_crest, median_line, outer and inner lips, pupils; head roll and yaw; capture quality), pose (each person's joints: shoulders, elbows, wrists, hips, knees, ankles; left and right are the person's own), arms (across each upper arm and forearm at several places: the arm's two edges and its width, for slimming with warp), skin (per face: average color, unevenness, redness, and small dark spots with their radius, to remove with brush_stroke spot_heal), text (read in English and Chinese), salient regions (where the eye goes), the horizon's tilt and the rotation that levels it, separate foreground subjects, people, animals, rectangles such as documents or screens (corners, for perspective), and labels classifying the scene. Use it to find what to select, crop to, straighten or repair. Looks at the canvas as it exports, or a layer's own pixels, optionally a region.",
                 schema: Schema.object([
                     "document_id": Schema.documentID,
                     "layer_id": Schema.string("Look at only this layer’s own pixels; positions are then in the layer’s pixels."),
@@ -41,6 +41,7 @@ extension AgentTools {
                     "steps_back": Schema.integer("How many undo steps back to compare with. Default 1, the last change.", minimum: 1, maximum: 100),
                     "threshold": Schema.number("How different a pixel has to be to count as changed, 0 to 1. Default 0.02.", minimum: 0, maximum: 1),
                     "max_size": Schema.integer("Longest side of each picture. Default 768.", minimum: 64, maximum: 2048),
+                    "outside_selection": Schema.boolean("Measure only outside the selection: select the person to check that a warp left the background alone."),
                 ].merging(Schema.rect("the part to compare")) { a, _ in a }), readOnly: true) { [unowned self] arguments in
                     try await compare(arguments)
                 },
@@ -205,6 +206,13 @@ extension AgentTools {
         var after = try await rendered(session.projectSnapshot())
         var result: JSONObject = ["steps": earlier.names, "before_size": ["width": before.width, "height": before.height],
                                   "after_size": ["width": after.width, "height": after.height]]
+        if try arguments.bool("outside_selection") == true {
+            guard let selection = session.selection, !selection.isEmpty else { throw AgentError("Nothing is selected to leave out.") }
+            guard before.width == after.width, before.height == after.height else { throw AgentError("The canvas changed size, so there’s nothing to compare outside the selection.") }
+            before = try Self.clearing(selection.path, from: before)
+            after = try Self.clearing(selection.path, from: after)
+            result["outside_selection"] = true
+        }
         var origin = CGPoint.zero
         if let region = try arguments.rect() {
             let bounds = region.integral.intersection(CGRect(x: 0, y: 0, width: min(before.width, after.width), height: min(before.height, after.height)))
@@ -233,6 +241,21 @@ extension AgentTools {
             result["pictures"] = "Before (left) and after (right). The canvas changed size, so there is no map of changed pixels."
         }
         return AgentResult(value: result, images: images)
+    }
+
+    /// `image` (document-sized) with `path` (document pixels) cut out.
+    private static func clearing(_ path: CGPath, from image: CGImage) throws -> CGImage {
+        guard let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { throw ExportError.render }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        context.translateBy(x: 0, y: CGFloat(image.height))
+        context.scaleBy(x: 1, y: -1)
+        context.setBlendMode(.clear)
+        context.addPath(path)
+        context.fillPath()
+        guard let cleared = context.makeImage() else { throw ExportError.render }
+        return cleared
     }
 
     /// `left` and `right` beside each other, labeled Before and After.
