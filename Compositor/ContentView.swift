@@ -164,7 +164,9 @@ struct ContentView: View {
                     .disabled(session.isImporting || session.showsBusy || session.levels != nil)
                     .modifier(NewProjectDropTarget(workspace: applicationDelegate?.workspace))
             }
-            ToolbarSpacer(.fixed, placement: .navigation)
+            #if compiler(>=6.2)
+            if #available(macOS 26.0, *) { ToolbarSpacer(.fixed, placement: .navigation) }
+            #endif
             if let workspace = applicationDelegate?.workspace {
                 ToolbarItem(placement: .navigation) {
                     ProjectTabStrip(workspace: workspace)
@@ -173,11 +175,13 @@ struct ContentView: View {
                         // strip scrolls instead.
                         .frame(width: max(200, windowWidth - 352), height: 34, alignment: .center)
                 }
-                .sharedBackgroundVisibility(.hidden)
+                .withoutSharedBackground()
             }
             // Absorb all remaining navigation-toolbar width before the zoom controls.
             // Without this spacer, the growing tab strip pushes the primary actions left.
-            ToolbarSpacer(.flexible, placement: .navigation)
+            #if compiler(>=6.2)
+            if #available(macOS 26.0, *) { ToolbarSpacer(.flexible, placement: .navigation) }
+            #endif
             ToolbarItem(placement: .primaryAction) {
                 Button("Fit") { session.fit() }.help("Fit canvas in window (⌘0)")
                     .accessibilityIdentifier("fitCanvas").disabled(session.document == nil)
@@ -374,6 +378,17 @@ extension View {
     /// Bordered buttons and pop-up menus drawn as capsules throughout the app. Borderless and plain buttons (the tool
     /// rail, the Layers panel footer) have no border to shape, so they're unaffected.
     func roundedControls() -> some View { buttonBorderShape(.capsule) }
+}
+
+extension ToolbarContent {
+    /// Drops the glass capsule macOS 26 draws behind toolbar items. Earlier systems draw none, so there's nothing to hide.
+    @ToolbarContentBuilder func withoutSharedBackground() -> some ToolbarContent {
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) { sharedBackgroundVisibility(.hidden) } else { self }
+        #else
+        self
+        #endif
+    }
 }
 
 extension View {

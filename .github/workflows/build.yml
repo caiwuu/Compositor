@@ -1,0 +1,82 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    name: build
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Select Xcode 26.6
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app
+
+      - name: Resolve Swift packages
+        run: >
+          xcodebuild -resolvePackageDependencies
+          -project Compositor.xcodeproj
+          -scheme Compositor
+          -onlyUsePackageVersionsFromResolvedFile
+
+      # No Developer ID on the runner: signed ad hoc, which Apple silicon needs to run the app at all.
+      - name: Build Release
+        run: >
+          xcodebuild build
+          -project Compositor.xcodeproj
+          -scheme Compositor
+          -configuration Release
+          -destination 'generic/platform=macOS'
+          -derivedDataPath DerivedData
+          CODE_SIGN_STYLE=Manual
+          CODE_SIGN_IDENTITY=-
+          DEVELOPMENT_TEAM=
+
+      - name: Package
+        run: |
+          APP=DerivedData/Build/Products/Release/Compositor.app
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          ditto -c -k --keepParent "$APP" Compositor.zip
+
+      - name: Upload app
+        uses: actions/upload-artifact@v7
+        with:
+          name: Compositor
+          path: Compositor.zip
+          retention-days: 14
+          if-no-files-found: error
+
+  # The build targets macOS 15, but the runner above is macOS 26: launching on Sequoia catches anything
+  # that links against a newer system and only fails there.
+  launch-on-sequoia:
+    name: launch on macOS 15
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Download app
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download ${{ github.run_id }} --repo ${{ github.repository }} --name Compositor
+          ditto -x -k Compositor.zip .
+
+      - name: Launch and stay running
+        run: |
+          ./Compositor.app/Contents/MacOS/Compositor > launch.log 2>&1 &
+          pid=$!
+          sleep 20
+          if ! kill -0 "$pid" 2>/dev/null; then
+            echo "Compositor exited during launch:"
+            cat launch.log
+            exit 1
+          fi
+          kill "$pid"
+          echo "Compositor stayed running for 20 seconds on $(sw_vers -productVersion)."
